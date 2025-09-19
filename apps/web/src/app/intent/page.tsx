@@ -3,7 +3,7 @@
  */
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -13,7 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, Search, Sparkles } from "lucide-react";
 import { flowConfig, getNextStep, getStepRoute } from "@/config/flow.config";
 
-export default function IntentPage() {
+function IntentPageInner() {
   const [query, setQuery] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
@@ -220,5 +220,13 @@ export default function IntentPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function IntentPage() {
+  return (
+    <Suspense>
+      <IntentPageInner />
+    </Suspense>
   );
 }

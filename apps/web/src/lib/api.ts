@@ -149,6 +149,9 @@ export const api = {
     
     adjustCredits: (credits: number) =>
       apiClient.post("/api/users/me/credits/adjust", { credits }),
+
+    getSubscription: () =>
+      apiClient.get("/api/users/me/subscription"),
   },
 };
 

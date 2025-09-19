@@ -113,9 +113,7 @@ export default function PreviewPage() {
       // Check subscription status with backend
       console.log("🔍 Checking subscription status...");
       
-      const subscriptionResponse = await makeAuthenticatedRequest("/api/users/me/subscription", {
-        method: "GET"
-      });
+      const subscriptionResponse = await api.users.getSubscription().then(r => r.data);
       
       console.log("📊 Subscription status:", subscriptionResponse);
       
