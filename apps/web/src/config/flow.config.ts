@@ -7,6 +7,7 @@ export const flowConfig = {
   // Updated flow: Landing → SSO → Processing (Gemini API) → Preview → Paywall → Reveal
   steps: [
     "landing",           // Hero page with "What are you looking for?"
+    "intent",            // Optional intent refinement step (enabled by feature flag)
     "sso_optional",      // Google/LinkedIn SSO (required after query)
     "processing",        // Gemini API call + progress indicator
     "preview",           // Masked matches + blurred email drafts
@@ -77,6 +78,7 @@ export const isStepEnabled = (step: FlowStep): boolean => {
 export const getStepRoute = (step: FlowStep): string => {
   const stepRoutes: Record<FlowStep, string> = {
     landing: "/",
+    intent: "/intent",
     sso_optional: "/auth/signin",
     processing: "/processing",
     preview: "/preview", 
@@ -90,6 +92,7 @@ export const getStepRoute = (step: FlowStep): string => {
 export const getStepDisplayName = (step: FlowStep): string => {
   const stepNames: Record<FlowStep, string> = {
     landing: "Welcome",
+    intent: "Refine Intent",
     sso_optional: "Sign In",
     processing: "Finding Matches",
     preview: "Preview Matches", 
