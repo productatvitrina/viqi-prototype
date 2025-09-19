@@ -1,0 +1,30 @@
+{
+  "name": "viqi-prototype",
+  "version": "1.0.0",
+  "description": "ViQi - Film & TV Industry Matchmaking SaaS",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:web\" \"npm run dev:api\"",
+    "dev:web": "cd apps/web && npm run dev",
+    "dev:api": "cd apps/api && python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000",
+    "build": "npm run build:web",
+    "build:web": "cd apps/web && npm run build",
+    "test": "npm run test:web && npm run test:api",
+    "test:web": "cd apps/web && npm test",
+    "test:api": "cd apps/api && python -m pytest",
+    "db:setup": "cd apps/api && python scripts/init_db.py",
+    "db:seed": "cd apps/api && python scripts/seed_db.py",
+    "setup": "npm install && npm run db:setup && npm run db:seed"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  }
+}

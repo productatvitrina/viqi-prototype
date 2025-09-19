@@ -1,0 +1,36 @@
+# OS
+.DS_Store
+
+# Env & secrets
+.env
+**/.env
+
+# Logs & databases
+apps/api/logs/
+apps/api/backend.log
+apps/api/viqi.db
+*.log
+*.sqlite3
+
+# Python
+**/__pycache__/
+**/*.pyc
+apps/api/venv/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+npm-debug.log*
+yarn-error.log
+pnp.*
+
+# Builds / coverage
+dist/
+build/
+coverage/
+
+# Editors
+.vscode/
+.idea/
+

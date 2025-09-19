@@ -1,0 +1,28 @@
+{
+  "defaultProvider": "gemini",
+  "models": {
+    "gemini": {
+      "model": "gemini-1.5-flash",
+      "baseUrl": "https://generativelanguage.googleapis.com",
+      "temperature": 0.7,
+      "maxTokens": 2048
+    },
+    "openai": {
+      "model": "gpt-4o-mini", 
+      "baseUrl": "https://api.openai.com/v1",
+      "temperature": 0.7,
+      "maxTokens": 2048
+    }
+  },
+  "active": "gemini",
+  "prompts": {
+    "matching": {
+      "system": "You are an AI assistant specialized in the film and TV industry. Your expertise includes understanding project needs, professional roles, and business relationships in entertainment. You help connect the right people for successful collaborations.",
+      "template": "QUERY: '{query}'\n\nUSER CONTEXT: {user_context}\n\nAVAILABLE PROFESSIONALS: {candidates}\n\nTask: Analyze the user's request and recommend exactly 4 most relevant professionals. Consider:\n- Project type and requirements\n- Professional expertise and experience\n- Company fit and industry relationships\n- Geographic and budget considerations\n- User's company context (if provided)\n\nFor each recommendation, provide:\n1. person_id: The ID from candidates list\n2. company_id: Their company ID\n3. reason: Why they're perfect for this request (2-3 detailed sentences including specific experience/projects)\n4. email_draft: Professional, personalized email (100-150 words) mentioning specific relevant experience\n5. score: Match confidence (0.7-0.98 range)\n\nIMPORTANT: Generate realistic email addresses in format: firstname.lastname@companyname.com\n\nReturn valid JSON with this exact structure:\n{{\n  \"recommendations\": [\n    {{\n      \"person_id\": 1,\n      \"company_id\": 1,\n      \"reason\": \"example reason\",\n      \"email_draft\": \"example email\",\n      \"score\": 0.85,\n      \"email_address\": \"name@company.com\"\n    }}\n  ]\n}}"
+    },
+    "credit_assessment": {
+      "system": "You are a credit assessment AI for a matchmaking platform.",
+      "template": "Analyze this user query and determine the credit cost (1-5): '{query}'\n\nFactors: complexity, specificity, expected value of matches.\n\nSimple queries = 1 credit, complex/high-value = 2-5 credits.\n\nRespond with just a number: 1, 2, 3, 4, or 5"
+    }
+  }
+}
