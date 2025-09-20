@@ -21,9 +21,16 @@ logger.add(
     level="DEBUG" if os.getenv("DEBUG", "false").lower() == "true" else "INFO"
 )
 
-# Add file logging
-os.makedirs("logs", exist_ok=True)
-logger.add("logs/api.log", rotation="500 MB", level="DEBUG")
+# Add file logging only when filesystem is writable
+log_dir = "logs"
+try:
+    if os.access(".", os.W_OK):
+        os.makedirs(log_dir, exist_ok=True)
+        logger.add(os.path.join(log_dir, "api.log"), rotation="500 MB", level="DEBUG")
+    else:
+        logger.info("Skipping file logging; filesystem is read-only")
+except Exception as exc:
+    logger.warning(f"Skipping file logging due to error: {exc}")
 
 # Import routes (session-only routes)
 from routes import matching_poc
