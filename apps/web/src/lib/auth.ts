@@ -3,8 +3,6 @@
  */
 import { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
-import axios from "axios";
-import { apiConfig, getApiUrl } from "@/config/api.config";
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -28,45 +26,21 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async signIn({ user, account, profile }) {
       console.log("🔐 SignIn callback:", { user: user.email, provider: account?.provider });
-      
-      try {
-        // Register/login user with backend
-        const response = await axios.post(getApiUrl("/api/auth/register"), {
-          email: user.email,
-          name: user.name,
-          auth_provider: account?.provider || "google"
-        });
-        
-        console.log("✅ Backend registration successful:", response.data);
-        return true;
-        
-      } catch (error) {
-        console.error("❌ Backend registration failed:", error);
-        // Allow sign in even if backend fails (for demo purposes)
-        return true;
-      }
+      // Session-only authentication - no backend calls needed
+      return true;
     },
     
     async jwt({ token, user, account }) {
       console.log("🔑 JWT callback:", { email: token.email });
       
-      // On first sign in, get backend token
+      // On first sign in, store user info in token for session
       if (account && user) {
-        try {
-          const response = await axios.post(getApiUrl("/api/auth/register"), {
-            email: user.email,
-            name: user.name,
-            auth_provider: account.provider
-          });
-          
-          if (response.data.access_token) {
-            token.backendToken = response.data.access_token;
-            token.user = response.data.user;
-            console.log("✅ Backend token obtained");
-          }
-        } catch (error) {
-          console.error("❌ Failed to get backend token:", error);
-        }
+        token.user = {
+          email: user.email,
+          name: user.name,
+          provider: account.provider
+        };
+        console.log("✅ User info stored in session");
       }
       
       return token;
@@ -75,9 +49,8 @@ export const authOptions: NextAuthOptions = {
     async session({ session, token }) {
       console.log("🎭 Session callback:", { email: session.user?.email });
       
-      // Pass backend token and user info to session
-      if (token.backendToken) {
-        (session as any).backendToken = token.backendToken;
+      // Pass user info to session (session-only, no database)
+      if (token.user) {
         (session as any).user = {
           ...session.user,
           ...(token.user as any)

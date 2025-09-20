@@ -81,47 +81,29 @@ function SignInPageInner() {
       const freeProviders = ['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'icloud.com'];
       const isBusinessEmail = !freeProviders.includes(domain);
       
-      // Register user with business email context
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/api/auth/register`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          email,
-          name: email.split('@')[0], // Use email prefix as name
-          auth_provider: "email",
-          business_domain: isBusinessEmail ? domain : null
-        })
-      });
+      // Session-only authentication - store in localStorage for session persistence
+      const userSession = {
+        email,
+        name: email.split('@')[0],
+        businessDomain: isBusinessEmail ? domain : '',
+        company: isBusinessEmail ? domain : null,
+        authType: 'email',
+        provider: 'email'
+      };
       
-      if (response.ok) {
-        const data = await response.json();
-        
-        // Store the session info in more persistent way
-        localStorage.setItem('customAuth', JSON.stringify({
-          email,
-          name: email.split('@')[0],
-          businessDomain: isBusinessEmail ? domain : '',
-          backendToken: data.access_token,
-          company: isBusinessEmail ? domain : null,
-          authType: 'email'
-        }));
-        
-        // Also store in sessionStorage for backward compatibility
-        sessionStorage.setItem('userEmail', email);
-        sessionStorage.setItem('businessDomain', isBusinessEmail ? domain : '');
-        sessionStorage.setItem('backendToken', data.access_token);
-        
-        toast.success(`Signed in with ${isBusinessEmail ? 'business' : 'personal'} email!`);
-        
-        // Redirect to processing step
-        const nextStep = getNextStep("sso_optional");
-        if (nextStep) {
-          router.push(getStepRoute(nextStep));
-        }
-      } else {
-        throw new Error("Email authentication failed");
+      // Store the session info for this POC (session-only, no backend)
+      localStorage.setItem('customAuth', JSON.stringify(userSession));
+      
+      // Also store in sessionStorage for backward compatibility
+      sessionStorage.setItem('userEmail', email);
+      sessionStorage.setItem('businessDomain', isBusinessEmail ? domain : '');
+      
+      toast.success(`Signed in with ${isBusinessEmail ? 'business' : 'personal'} email!`);
+      
+      // Redirect to next step
+      const nextStep = getNextStep("sso_optional");
+      if (nextStep) {
+        router.push(getStepRoute(nextStep));
       }
       
     } catch (error) {
