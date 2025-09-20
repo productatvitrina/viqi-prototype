@@ -41,11 +41,11 @@ function IntentPageInner() {
       // Store the refined query
       sessionStorage.setItem("userQuery", query.trim());
       
-      // Get next step from flow config
-      const nextStep = getNextStep("intent");
-      if (nextStep) {
-        router.push(getStepRoute(nextStep));
-      }
+      // Compute next step robustly (works even if TS union doesn't include "intent")
+      const steps = flowConfig.steps as readonly string[];
+      const idx = steps.indexOf("intent" as any);
+      const nextStep = idx >= 0 && idx + 1 < steps.length ? (steps[idx + 1] as any) : null;
+      if (nextStep) router.push(getStepRoute(nextStep));
     } catch (error) {
       console.error("Intent processing failed:", error);
     } finally {
