@@ -5,6 +5,7 @@ paid check by email to decide whether to return blurred or revealed results.
 """
 import os
 import json
+import asyncio
 from typing import Optional, Dict, Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -17,6 +18,41 @@ router = APIRouter()
 
 # Configure Gemini - For POC, we'll use mock responses
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+MOCK_GEMINI_RESULTS = [
+    {
+        "name": "Sarah Martinez",
+        "title": "Director of Content Acquisition",
+        "company": "Netflix",
+        "email": "sarah.martinez@netflix.com",
+        "reason": "Sarah leads Netflix's independent film acquisition and has experience with similar projects in your genre.",
+        "email_draft": "Hi Sarah, I'm reaching out about our film project that would be perfect for Netflix's slate. Would you be available for a brief call?"
+    },
+    {
+        "name": "Michael Chen",
+        "title": "VP of Production",
+        "company": "Warner Bros Pictures",
+        "email": "michael.chen@warnerbros.com",
+        "reason": "Michael oversees production partnerships and has a track record of supporting innovative storytelling.",
+        "email_draft": "Hi Michael, I'd love to discuss our upcoming project with Warner Bros. The story aligns well with your recent successful releases."
+    },
+    {
+        "name": "Jessica Rodriguez",
+        "title": "Head of Business Development",
+        "company": "A24",
+        "email": "jessica.rodriguez@a24films.com",
+        "reason": "Jessica focuses on unique, artist-driven content that matches A24's brand and your project's vision.",
+        "email_draft": "Hi Jessica, our film project embodies the creative spirit A24 is known for. I'd appreciate the opportunity to share more details."
+    },
+    {
+        "name": "David Park",
+        "title": "Senior Director of Acquisitions",
+        "company": "Sony Pictures Classics",
+        "email": "david.park@sonyclassics.com",
+        "reason": "David specializes in acquiring distinctive films with strong artistic merit and commercial potential.",
+        "email_draft": "Hi David, I believe our project would be an excellent fit for Sony Pictures Classics' portfolio. Could we schedule a time to discuss?"
+    }
+]
+
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
     model = genai.GenerativeModel('gemini-1.5-flash')
@@ -158,46 +194,16 @@ Return ONLY a valid JSON array with this structure:
 """
 
     if not model:
-        # Mock response for testing when no API key
         logger.info("Using mock Gemini response")
-        return [
-            {
-                "name": "Sarah Martinez",
-                "title": "Director of Content Acquisition",
-                "company": "Netflix", 
-                "email": "sarah.martinez@netflix.com",
-                "reason": "Sarah leads Netflix's independent film acquisition and has experience with similar projects in your genre.",
-                "email_draft": "Hi Sarah, I'm reaching out about our film project that would be perfect for Netflix's slate. Would you be available for a brief call?"
-            },
-            {
-                "name": "Michael Chen",
-                "title": "VP of Production",
-                "company": "Warner Bros Pictures",
-                "email": "michael.chen@warnerbros.com", 
-                "reason": "Michael oversees production partnerships and has a track record of supporting innovative storytelling.",
-                "email_draft": "Hi Michael, I'd love to discuss our upcoming project with Warner Bros. The story aligns well with your recent successful releases."
-            },
-            {
-                "name": "Jessica Rodriguez",
-                "title": "Head of Business Development",
-                "company": "A24",
-                "email": "jessica.rodriguez@a24films.com",
-                "reason": "Jessica focuses on unique, artist-driven content that matches A24's brand and your project's vision.",
-                "email_draft": "Hi Jessica, our film project embodies the creative spirit A24 is known for. I'd appreciate the opportunity to share more details."
-            },
-            {
-                "name": "David Park",
-                "title": "Senior Director of Acquisitions", 
-                "company": "Sony Pictures Classics",
-                "email": "david.park@sonyclassics.com",
-                "reason": "David specializes in acquiring distinctive films with strong artistic merit and commercial potential.",
-                "email_draft": "Hi David, I believe our project would be an excellent fit for Sony Pictures Classics' portfolio. Could we schedule a time to discuss?"
-            }
-        ]
-    
+        return MOCK_GEMINI_RESULTS
+
     try:
         logger.info(f"Calling Gemini API with query: {query[:100]}...")
-        response = model.generate_content(prompt)
+        timeout_seconds = float(os.getenv("GEMINI_TIMEOUT", 20))
+        response = await asyncio.wait_for(
+            asyncio.to_thread(model.generate_content, prompt),
+            timeout=timeout_seconds
+        )
         
         if not response.text:
             raise Exception("Empty response from Gemini")
@@ -220,6 +226,10 @@ Return ONLY a valid JSON array with this structure:
         logger.info(f"Successfully parsed {len(results)} results from Gemini")
         return results
         
+    except asyncio.TimeoutError:
+        logger.warning("Gemini API call timed out; falling back to mock response")
+        return MOCK_GEMINI_RESULTS
+
     except json.JSONDecodeError as e:
         logger.error(f"Failed to parse Gemini JSON response: {e}")
         logger.error(f"Raw response: {response.text if response else 'No response'}")
