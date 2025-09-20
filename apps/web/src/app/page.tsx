@@ -103,15 +103,7 @@ export default function HomePage() {
                   Sign Out
                 </Button>
               </div>
-            ) : (
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => router.push("/auth/signin")}
-              >
-                Sign In
-              </Button>
-            )}
+            ) : null}
           </div>
         </div>
       </header>

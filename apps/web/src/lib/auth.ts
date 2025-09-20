@@ -4,6 +4,17 @@
 import { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 
+const hasGoogleId = !!process.env.GOOGLE_CLIENT_ID;
+const hasGoogleSecret = !!process.env.GOOGLE_CLIENT_SECRET;
+
+if (!hasGoogleId || !hasGoogleSecret) {
+  console.error("[NextAuth] Missing Google OAuth env configuration", {
+    hasGoogleId,
+    hasGoogleSecret,
+    nextAuthUrl: process.env.NEXTAUTH_URL,
+  });
+}
+
 export const authOptions: NextAuthOptions = {
   providers: [
     GoogleProvider({
