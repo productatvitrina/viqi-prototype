@@ -126,7 +126,7 @@ export const api = {
     getPlans: () =>
       apiClient.get("/api/payments/plans"),
     
-    createCheckout: (data: { plan_name: string; billing_cycle: string; geo_group?: string }) =>
+    createCheckout: (data: { plan_name: string; billing_cycle: string; geo_group?: string; price_id?: string }) =>
       apiClient.post("/api/payments/checkout", data),
     
     purchaseCredits: (data: { credits: number; match_id?: number }) =>

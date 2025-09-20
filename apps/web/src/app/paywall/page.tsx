@@ -25,6 +25,8 @@ interface Plan {
   currency: string;
   monthly_price_display: string;
   annual_price_display: string;
+  stripe_monthly_price_id?: string | null;
+  stripe_annual_price_id?: string | null;
 }
 
 interface PlansResponse {
@@ -158,7 +160,7 @@ export default function PaywallPage() {
     // Check both session and custom auth
     const currentUser = getCurrentUser();
     const isAuthenticated = session?.user || currentUser;
-    
+
     console.log("🛒 Subscribe attempt:", {
       planName,
       hasSession: !!session?.user,
@@ -178,11 +180,28 @@ export default function PaywallPage() {
     setIsLoading(true);
     setSelectedPlan(planName);
 
+    const plan = plans.find((item) => item.name === planName);
+    const priceId = plan
+      ? billingCycle === "annual"
+        ? plan.stripe_annual_price_id
+        : plan.stripe_monthly_price_id
+      : null;
+
+    if (!plan || !priceId) {
+      console.warn("⚠️ No Stripe price configured for plan", { planName, billingCycle });
+      toast.error("Plan configuration missing", {
+        description: "Stripe price not configured for this plan. Please contact support."
+      });
+      setIsLoading(false);
+      return;
+    }
+
     try {
-      const response = await makeAuthenticatedRequest(() => 
+      const response = await makeAuthenticatedRequest(() =>
         api.payments.createCheckout({
           plan_name: planName,
-          billing_cycle: billingCycle
+          billing_cycle: billingCycle,
+          price_id: priceId
         })
       );
 

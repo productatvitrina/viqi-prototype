@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import re
 from typing import Optional, Dict, Any, List
 
 from fastapi import APIRouter, HTTPException
@@ -30,6 +31,7 @@ class CreateCheckoutRequest(BaseModel):
     success_url: Optional[str] = None
     cancel_url: Optional[str] = None
     customer_email: Optional[str] = None
+    price_id: Optional[str] = None
 
 
 class PlanResponse(BaseModel):
@@ -196,7 +198,7 @@ async def create_checkout_session(payload: CreateCheckoutRequest) -> Dict[str, A
         logger.info("Stripe not configured; returning demo checkout URL")
         return {"checkout_url": demo_url, "session_id": "demo-session"}
 
-    price_id = _resolve_price_id(payload.plan_name, payload.billing_cycle)
+    price_id = payload.price_id or _resolve_price_id(payload.plan_name, payload.billing_cycle)
     if not price_id:
         logger.warning("No Stripe price ID configured for plan %s (%s)", payload.plan_name, payload.billing_cycle)
         return {"checkout_url": demo_url, "session_id": "demo-session"}
@@ -221,8 +223,37 @@ async def create_checkout_session(payload: CreateCheckoutRequest) -> Dict[str, A
 
 
 def _resolve_price_id(plan_name: str, billing_cycle: str) -> Optional[str]:
-    env_key = f"STRIPE_PRICE_ID_{plan_name.upper()}_{billing_cycle.upper()}"
-    return os.getenv(env_key)
+    """Resolve the Stripe price ID from environment variables."""
+
+    billing = billing_cycle.upper()
+    # Normalise plan names coming from Stripe (e.g. "ViQi Starter Plan") so
+    # they can map to environment variable keys.
+    sanitized = re.sub(r"[^A-Z0-9]+", "_", plan_name.upper()).strip("_")
+
+    candidates: List[str] = [f"STRIPE_PRICE_ID_{sanitized}_{billing}"]
+
+    # Support legacy keys that omitted the trailing "_PLAN" or used only the
+    # first/last word of the plan name.
+    if sanitized.endswith("_PLAN"):
+        candidates.append(f"STRIPE_PRICE_ID_{sanitized[:-5]}_{billing}")
+
+    words = [word for word in sanitized.split("_") if word]
+    if words:
+        # Consider each individual word (e.g. ``STARTER``) as well as the
+        # first and last entries for backwards compatibility.
+        for word in words:
+            candidates.append(f"STRIPE_PRICE_ID_{word}_{billing}")
+
+        candidates.append(f"STRIPE_PRICE_ID_{words[0]}_{billing}")
+        candidates.append(f"STRIPE_PRICE_ID_{words[-1]}_{billing}")
+
+    for env_key in dict.fromkeys(candidates):  # Preserve order while deduping
+        value = os.getenv(env_key)
+        if value:
+            logger.debug("Resolved Stripe price ID using env var %s", env_key)
+            return value
+
+    return None
 
 
 @router.post("/purchase-credits")
@@ -241,4 +272,3 @@ async def verify_payment(session_id: str) -> Dict[str, Any]:
 async def stripe_webhook() -> Dict[str, Any]:
     logger.info("Received Stripe webhook (ignored in demo mode)")
     return {"status": "ignored"}
-
