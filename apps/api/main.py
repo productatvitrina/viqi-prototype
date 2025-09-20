@@ -32,8 +32,8 @@ try:
 except Exception as exc:
     logger.warning(f"Skipping file logging due to error: {exc}")
 
-# Import routes (session-only routes)
-from routes import matching_poc
+# Import routes
+from routes import matching_poc, payments, users
 
 
 @asynccontextmanager
@@ -161,8 +161,10 @@ async def root():
     }
 
 
-# Include routers (session-only POC)
+# Include routers
 app.include_router(matching_poc.router, prefix="/api/matching-poc", tags=["matching-poc"])  # Session-only POC version
+app.include_router(payments.router, prefix="/api/payments", tags=["payments"])
+app.include_router(users.router, prefix="/api/users", tags=["users"])
 
 
 if __name__ == "__main__":
