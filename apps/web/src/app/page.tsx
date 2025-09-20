@@ -85,18 +85,23 @@ export default function HomePage() {
                 <span className="text-sm text-gray-600">
                   Hi, {session?.user?.name?.split(' ')[0] || customUser?.name}
                 </span>
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   size="sm"
                   onClick={() => {
-                    if (customUser) {
+                    try {
                       localStorage.removeItem('customAuth');
                       sessionStorage.removeItem('userEmail');
                       sessionStorage.removeItem('backendToken');
                       sessionStorage.removeItem('businessDomain');
-                      setCustomUser(null);
+                    } catch (storageError) {
+                      console.warn('Failed to clear stored auth state', storageError);
+                    }
+
+                    if ((window as any).__NEXTAUTH) {
+                      window.location.href = '/api/auth/signout?callbackUrl=/';
                     } else {
-                      // NextAuth signout would go here
+                      window.location.href = '/';
                     }
                   }}
                 >
@@ -199,16 +204,8 @@ export default function HomePage() {
           </div>
 
           {/* CTA Buttons */}
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button size="lg" variant="outline">
-              Find Partners
-            </Button>
-            <Button size="lg" variant="outline">
-              Find Projects
-            </Button>
-            <Button size="lg" variant="outline">
-              Create Reports
-            </Button>
+          <div className="mt-8 text-sm text-gray-500">
+            Need help? Reach out at <a href="mailto:help@vitrina.ai" className="text-blue-600">help@vitrina.ai</a>
           </div>
         </div>
       </main>

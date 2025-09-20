@@ -238,20 +238,23 @@ export default function PreviewPage() {
                   <span className="text-sm text-gray-600">
                     Hi, {session?.user?.name?.split(' ')[0] || customUser?.name}
                   </span>
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     size="sm"
                     onClick={() => {
-                      if (customUser) {
-                        // Custom email auth logout
+                      try {
                         localStorage.removeItem('customAuth');
                         sessionStorage.removeItem('userEmail');
                         sessionStorage.removeItem('backendToken');
                         sessionStorage.removeItem('businessDomain');
-                        router.push('/');
+                      } catch (storageError) {
+                        console.warn('Failed to clear stored auth state', storageError);
+                      }
+
+                      if ((window as any).__NEXTAUTH) {
+                        window.location.href = '/api/auth/signout?callbackUrl=/';
                       } else {
-                        // NextAuth logout
-                        signOut({ callbackUrl: '/' });
+                        window.location.href = '/';
                       }
                     }}
                   >
