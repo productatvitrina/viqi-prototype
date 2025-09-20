@@ -3,6 +3,10 @@ fastapi==0.104.1
 uvicorn==0.24.0
 python-multipart==0.0.6
 
+# Core dependencies
+pydantic==2.9.2
+email-validator==2.1.0.post1
+
 # Auth and Security (minimal for session-only)
 python-dotenv==1.0.0
 
@@ -16,16 +20,12 @@ stripe==8.5.0
 # LLM Integration (for Gemini API)
 google-generativeai==0.3.2
 
-# Utilities
-pydantic==2.9.2
-email-validator==2.1.0.post1
-
 # Logging and monitoring
 loguru==0.7.2
 
-# Testing
+# Testing (optional - remove for production)
 pytest==7.4.3
 pytest-asyncio==0.21.1
 
-# Development
+# Development (optional - remove for production)
 black==23.11.0
