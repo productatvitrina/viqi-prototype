@@ -88,12 +88,103 @@ def get_user_geo_group(request: Request) -> str:
         return "default"
 
 
-def format_price(cents: int, currency: str = "USD") -> str:
+def format_price(cents: Optional[int], currency: str = "USD") -> str:
     """Format price in cents to display string."""
-    if currency == "USD":
+    if cents is None:
+        return "-"
+    if currency.upper() == "USD":
         return f"${cents / 100:.0f}"
-    else:
-        return f"{cents / 100:.0f} {currency}"
+    return f"{cents / 100:.0f} {currency}"
+
+
+def fetch_stripe_plans(geo_group: str) -> List[PlanResponse]:
+    """Fetch subscription plans directly from Stripe, if available."""
+    if not stripe.api_key:
+        logger.warning("Cannot fetch Stripe plans: STRIPE_SECRET_KEY missing")
+        return []
+
+    try:
+        prices = stripe.Price.list(active=True, expand=["data.product"], limit=100)
+    except Exception as exc:
+        logger.error(f"Failed to fetch Stripe prices: {exc}")
+        return []
+
+    plans_by_product: Dict[str, Dict[str, Any]] = {}
+
+    for price in prices.auto_paging_iter():
+        if price.get("type") != "recurring":
+            continue
+
+        product = price.get("product")
+        if isinstance(product, str):
+            try:
+                product = stripe.Product.retrieve(product)
+            except Exception as exc:
+                logger.warning(f"Unable to retrieve product {product}: {exc}")
+                continue
+
+        metadata = (product.get("metadata") or {}) if product else {}
+        product_geo = (metadata.get("geo_group") or "default").lower()
+        if geo_group.lower() not in (product_geo, "default"):
+            continue
+
+        currency = price.get("currency", "usd").upper()
+        product_id = product.get("id") if product else None
+        if not product_id:
+            continue
+
+        plan_entry = plans_by_product.setdefault(product_id, {
+            "name": product.get("name", "Stripe Plan"),
+            "currency": currency,
+            "monthly_price_cents": None,
+            "annual_price_cents": None,
+            "included_credits": int(metadata.get("included_credits") or 0),
+            "overage_price_cents": int(metadata.get("overage_price_cents") or 0),
+            "stripe_monthly_price_id": None,
+            "stripe_annual_price_id": None,
+        })
+
+        interval = (price.get("recurring") or {}).get("interval")
+        amount = price.get("unit_amount")
+
+        if interval == "month":
+            plan_entry["monthly_price_cents"] = amount
+            plan_entry["stripe_monthly_price_id"] = price.get("id")
+        elif interval == "year":
+            plan_entry["annual_price_cents"] = amount
+            plan_entry["stripe_annual_price_id"] = price.get("id")
+
+    plan_responses: List[PlanResponse] = []
+    for idx, plan in enumerate(plans_by_product.values(), start=1):
+        if plan["monthly_price_cents"] is None and plan["annual_price_cents"] is None:
+            continue
+
+        monthly = plan["monthly_price_cents"]
+        annual = plan["annual_price_cents"]
+
+        if monthly is None and annual is not None:
+            monthly = annual // 12
+        if annual is None and monthly is not None:
+            annual = monthly * 12
+
+        plan_responses.append(PlanResponse(
+            id=idx,
+            name=plan["name"],
+            monthly_price_cents=monthly or 0,
+            annual_price_cents=annual or 0,
+            included_credits=plan["included_credits"],
+            overage_price_cents=plan["overage_price_cents"],
+            currency=plan["currency"],
+            monthly_price_display=format_price(monthly, plan["currency"]),
+            annual_price_display=format_price(annual, plan["currency"]),
+            stripe_monthly_price_id=plan["stripe_monthly_price_id"],
+            stripe_annual_price_id=plan["stripe_annual_price_id"]
+        ))
+
+    if plan_responses:
+        logger.info(f"Returning {len(plan_responses)} Stripe plans for geo group {geo_group}")
+
+    return plan_responses
 
 
 @router.get("/plans")
@@ -104,6 +195,13 @@ async def get_plans(
     """Get available plans for user's geography."""
     geo_group = get_user_geo_group(request)
     logger.debug(f"Getting plans for geo group: {geo_group}")
+
+    stripe_plans = fetch_stripe_plans(geo_group)
+    if stripe_plans:
+        return {
+            "plans": stripe_plans,
+            "geo_group": geo_group
+        }
     
     plans = db.query(Plan).filter(
         Plan.geo_group == geo_group,

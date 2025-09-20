@@ -145,10 +145,7 @@ export default function PreviewPage() {
       if (subscriptionResponse.access?.has_credits_or_subscription) {
         console.log("✅ User has access - revealing matches");
         toast.success("Access granted! Revealing your matches...");
-        
-        // For POC, we'll show the paywall anyway since we don't have reveal logic
-        // In production, this would reveal the actual contact details
-        router.push(getStepRoute("paywall"));
+        router.push(getStepRoute("reveal"));
       } else {
         console.log("🔒 User needs to purchase - redirecting to paywall");
         toast.info("Upgrade required to see full contact details");
