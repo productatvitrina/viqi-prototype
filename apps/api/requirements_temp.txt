@@ -1,31 +1,20 @@
-# FastAPI and web framework
 fastapi==0.104.1
 uvicorn==0.24.0
 python-multipart==0.0.6
-
-# Auth and Security (minimal for session-only)
+sqlalchemy==1.4.53
+alembic==1.12.1
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
 python-dotenv==1.0.0
-
-# HTTP and API clients
+PyJWT==2.10.1
 httpx==0.25.2
 aiohttp==3.12.15
-
-# Payments (for Stripe payment checks)
 stripe==8.5.0
-
-# LLM Integration (for Gemini API)
 google-generativeai==0.3.2
-
-# Utilities
+redis==5.0.1
 pydantic==2.9.2
 email-validator==2.1.0.post1
-
-# Logging and monitoring
 loguru==0.7.2
-
-# Testing
 pytest==7.4.3
 pytest-asyncio==0.21.1
-
-# Development
 black==23.11.0

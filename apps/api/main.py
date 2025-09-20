@@ -25,24 +25,15 @@ logger.add(
 os.makedirs("logs", exist_ok=True)
 logger.add("logs/api.log", rotation="500 MB", level="DEBUG")
 
-# Import routes
-from routes import auth, matching, matching_poc, payments, users
+# Import routes (session-only routes)
+from routes import matching_poc
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan management."""
-    logger.info("Starting ViQi API server...")
-    
-    try:
-        # Initialize database connection test
-        from config.database import engine
-        with engine.connect() as conn:
-            conn.execute("SELECT 1")
-        logger.info("Database connection verified")
-        
-    except Exception as e:
-        logger.error(f"Database connection failed: {e}")
+    """Application lifespan management - session-only setup."""
+    logger.info("Starting ViQi API server (session-only mode)...")
+    logger.info("No database required - using session-only authentication")
     
     yield
     
@@ -162,12 +153,8 @@ async def root():
     }
 
 
-# Include routers
-app.include_router(auth.router, prefix="/api/auth", tags=["authentication"])
-app.include_router(matching_poc.router, prefix="/api/matching-poc", tags=["matching-poc"])  # POC version without auth
-app.include_router(matching.router, prefix="/api/matching", tags=["matching"])  # Authenticated version
-app.include_router(payments.router, prefix="/api/payments", tags=["payments"])
-app.include_router(users.router, prefix="/api/users", tags=["users"])
+# Include routers (session-only POC)
+app.include_router(matching_poc.router, prefix="/api/matching-poc", tags=["matching-poc"])  # Session-only POC version
 
 
 if __name__ == "__main__":
