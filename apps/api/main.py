@@ -34,6 +34,7 @@ except Exception as exc:
 
 # Import routes
 from routes import matching_poc, payments, users
+from config.database import init_db
 
 
 @asynccontextmanager
@@ -41,6 +42,11 @@ async def lifespan(app: FastAPI):
     """Application lifespan management - session-only setup."""
     logger.info("Starting ViQi API server (session-only mode)...")
     logger.info("No database required - using session-only authentication")
+
+    try:
+        init_db()
+    except Exception as db_error:
+        logger.error(f"Database initialization failed: {db_error}")
     
     yield
     
