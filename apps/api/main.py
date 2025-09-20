@@ -79,6 +79,7 @@ trusted_hosts = [h.strip() for h in trusted_hosts_env.split(",") if h.strip()] o
     "127.0.0.1",
     "*.vercel.app",
     "*.onrender.com",
+    "viqi-prototype.onrender.com",
 ]
 
 app.add_middleware(

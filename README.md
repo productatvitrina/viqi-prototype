@@ -2,13 +2,14 @@
 
 A modern SaaS application that connects Film & TV professionals using AI-powered matching and personalized outreach.
 
-## 🚀 Quick Start
+## 🚀 Quick Start (Session-Only POC)
 
 ### Prerequisites
 - Node.js 18+
 - Python 3.9+
-- Docker and Docker Compose
 - Google OAuth App (for SSO)
+- Stripe Account (for payment checks)
+- Gemini API Key (for AI matching)
 
 ### Setup
 
@@ -18,58 +19,51 @@ A modern SaaS application that connects Film & TV professionals using AI-powered
    cd apps/api && pip install -r requirements.txt
    ```
 
-2. **Start local services:**
-   ```bash
-   docker-compose up -d
-   ```
+2. **Configure environment variables:**
+   Copy `.env.production.example` and set your API keys:
+   - Google OAuth credentials
+   - Stripe keys
+   - Gemini API key
 
-3. **Set up database and seed data:**
-   ```bash
-   npm run setup
-   ```
-
-4. **Configure Google OAuth:**
+3. **Configure Google OAuth:**
    - Go to [Google Console](https://console.developers.google.com)
    - Create a new project or select existing
    - Enable Google+ API
    - Create OAuth 2.0 credentials
    - Add `http://localhost:3000/api/auth/callback/google` to authorized redirect URIs
-   - Update `.env` with your `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`
 
-5. **Start development servers:**
+4. **Start development servers:**
    ```bash
    npm run dev
    ```
 
    This starts:
    - Frontend: http://localhost:3000
-   - Backend API: http://localhost:8000
+   - Backend API: http://localhost:8000 (session-only)
    - API Docs: http://localhost:8000/docs
 
 ## 📋 Features
 
-### Core Functionality
+### Core Functionality (Session-Only POC)
 - ✅ Mobile-first responsive design
-- ✅ Google OAuth SSO integration
-- ✅ AI-powered matching using Gemini
-- ✅ Configurable flow (SSO/Paywall positioning)
-- ✅ Stripe payments (subscription + credits)
-- ✅ Email masking and reveal system
-- ✅ Token usage tracking
+- ✅ Session-only authentication (Google OAuth + email)
+- ✅ AI-powered matching using Gemini API
+- ✅ Stripe payment verification (no database)
+- ✅ Real-time results processing
+- ✅ Zero database dependencies
 - ✅ Comprehensive debugging logs
 
-### User Flow
+### User Flow (Session-Only)
 1. **Landing**: User describes what they're looking for
-2. **SSO** (configurable): Google OAuth login
-3. **Preview**: Shows 4 masked matches with blurred emails
-4. **Paywall**: Stripe checkout for credits/subscription
-5. **Reveal**: Full contact details and personalized email drafts
-6. **Dashboard**: Usage tracking, credits, history
+2. **Authentication**: Google OAuth or email (stored in session only)
+3. **Processing**: Query sent to Gemini API for matching
+4. **Payment Check**: Stripe API checks payment status by email
+5. **Results**: Shows full results if paid, paywall if not paid
 
 ### Configuration
-- `apps/web/config/flow.config.ts` - Flow step ordering
-- `apps/api/config/llm.config.json` - LLM model switching
-- Environment variables for all integrations
+- Session-only approach - no database setup required
+- Environment variables for API integrations
+- Easily deployable to Vercel (frontend) + Render (backend)
 
 ## 🧪 Testing
 
