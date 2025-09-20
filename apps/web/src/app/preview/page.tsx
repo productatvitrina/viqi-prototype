@@ -56,6 +56,30 @@ export default function PreviewPage() {
     setCustomUser(user);
   }, []);
 
+  const handleSignOut = async () => {
+    try {
+      localStorage.removeItem('customAuth');
+    } catch (err) {
+      console.warn('Failed to remove customAuth from localStorage', err);
+    }
+
+    try {
+      sessionStorage.removeItem('userEmail');
+      sessionStorage.removeItem('backendToken');
+      sessionStorage.removeItem('businessDomain');
+    } catch (err) {
+      console.warn('Failed to remove session auth keys', err);
+    }
+
+    setCustomUser(null);
+
+    if (session?.user) {
+      await signOut({ callbackUrl: '/' });
+    } else {
+      router.push('/');
+    }
+  };
+
   useEffect(() => {
     const loadMatches = async () => {
       try {
@@ -241,22 +265,7 @@ export default function PreviewPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => {
-                      try {
-                        localStorage.removeItem('customAuth');
-                        sessionStorage.removeItem('userEmail');
-                        sessionStorage.removeItem('backendToken');
-                        sessionStorage.removeItem('businessDomain');
-                      } catch (storageError) {
-                        console.warn('Failed to clear stored auth state', storageError);
-                      }
-
-                      if ((window as any).__NEXTAUTH) {
-                        window.location.href = '/api/auth/signout?callbackUrl=/';
-                      } else {
-                        window.location.href = '/';
-                      }
-                    }}
+                    onClick={handleSignOut}
                   >
                     Sign Out
                   </Button>
