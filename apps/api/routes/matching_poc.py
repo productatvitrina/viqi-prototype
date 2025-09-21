@@ -238,7 +238,7 @@ You are an AI assistant for the film and TV industry. A user is asking: "{query}
 
 User's company: {user_company if user_company else "Unknown"}
 
-Please provide exactly 4 relevant companies and key contacts that this user should reach out to.
+Please provide exactly 4 relevant contacts that this user should reach out to.
 For each contact, provide:
 1. Person's full name
 2. Their job title
@@ -247,7 +247,7 @@ For each contact, provide:
 5. Brief reason why this is a good match (2-3 sentences)
 6. A short, professional outreach email draft (2-3 sentences max)
 
-Focus on real industry companies like Netflix, Warner Bros, Disney, Universal, Paramount, Sony Pictures, A24, Blumhouse, etc.
+Focus on real industry companies from the film, tv, media and entertainment industry.
 
 Return ONLY a valid JSON array with this structure:
 [
