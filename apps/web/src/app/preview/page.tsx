@@ -3,7 +3,7 @@
  */
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, Eye, EyeOff, ThumbsUp, ThumbsDown, CreditCard } from "lucide-react";
 import { flowConfig, getNextStep, getStepRoute } from "@/config/flow.config";
 import { api, makeAuthenticatedRequest, getCurrentUser } from "@/lib/api";
+import Spinner from "@/components/ui/spinner";
 import { toast } from "sonner";
 
 interface MatchPreview {
@@ -46,9 +47,17 @@ export default function PreviewPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [customUser, setCustomUser] = useState<any>(null);
+  const [isCheckingAccess, setIsCheckingAccess] = useState(false);
+  const isMountedRef = useRef(true);
 
   const { data: session, status } = useSession();
   const router = useRouter();
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   // Check for custom email auth
   useEffect(() => {
@@ -123,41 +132,51 @@ export default function PreviewPage() {
   }, [session, status, router]);
 
   const handleContinue = async () => {
-    // Check if user has valid subscription via Stripe
+    if (isCheckingAccess) {
+      return;
+    }
+
     const currentUser = getCurrentUser();
     const userEmail = session?.user?.email || currentUser?.email;
-    
+
     if (!userEmail) {
       toast.error("Please sign in to continue");
       router.push("/auth/signin");
       return;
     }
-    
+
+    setIsCheckingAccess(true);
+    let redirected = false;
+
     try {
-      // Check subscription status with backend
       console.log("🔍 Checking subscription status...", { userEmail });
-      
-      const subscriptionResponse = await api.users.getSubscription(userEmail).then(r => r.data);
-      
+
+      const subscriptionResponse = await api.users
+        .getSubscription(userEmail)
+        .then((r) => r.data);
+
       console.log("📊 Subscription status:", subscriptionResponse);
-      
-      // Check if user has access (subscription or credits)
+
       if (subscriptionResponse.access?.has_credits_or_subscription) {
         console.log("✅ User has access - revealing matches");
         toast.success("Access granted! Revealing your matches...");
         router.push(getStepRoute("reveal"));
+        redirected = true;
       } else {
         console.log("🔒 User needs to purchase - redirecting to paywall");
         toast.info("Upgrade required to see full contact details");
         router.push(getStepRoute("paywall"));
+        redirected = true;
       }
-      
     } catch (error) {
       console.error("❌ Failed to check subscription:", error);
-      
-      // Fallback to paywall on error
       console.log("🔄 Fallback: redirecting to paywall");
       router.push(getStepRoute("paywall"));
+      redirected = true;
+    } finally {
+      if (!redirected && isMountedRef.current) {
+        setIsCheckingAccess(false);
+      }
     }
   };
 
@@ -171,17 +190,17 @@ export default function PreviewPage() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
         <header className="border-b bg-white/80 backdrop-blur-sm">
-          <div className="container mx-auto px-4 py-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                  <span className="text-white font-bold text-lg">V</span>
-                </div>
-                <span className="text-xl font-bold text-gray-900">ViQi AI</span>
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+                <span className="text-white font-bold text-lg">V</span>
               </div>
-              <Badge variant="secondary">Step 3 of 5</Badge>
+              <span className="text-xl font-bold text-gray-900">ViQi AI</span>
             </div>
+            <Badge variant="secondary" className="w-fit self-start sm:self-auto">Step 3 of 5</Badge>
           </div>
+        </div>
         </header>
 
         <main className="container mx-auto px-4 py-12">
@@ -235,27 +254,27 @@ export default function PreviewPage() {
       {/* Header */}
       <header className="border-b bg-white/80 backdrop-blur-sm">
         <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-wrap items-center gap-3">
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => router.back()}
-                className="flex items-center space-x-2"
+                className="flex items-center gap-2 transition-all duration-150 hover:-translate-y-0.5 active:scale-95"
               >
                 <ArrowLeft className="w-4 h-4" />
                 <span>Back</span>
               </Button>
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center gap-2">
                 <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
                   <span className="text-white font-bold text-lg">V</span>
                 </div>
                 <span className="text-xl font-bold text-gray-900">ViQi AI</span>
               </div>
             </div>
-            <div className="flex items-center space-x-4">
+            <div className="flex flex-wrap items-center gap-3 justify-between sm:justify-end">
               {(session?.user || customUser) && (
-                <div className="flex items-center space-x-3">
+                <div className="flex items-center gap-3">
                   <span className="text-sm text-gray-600">
                     Hi, {session?.user?.name?.split(' ')[0] || customUser?.name}
                   </span>
@@ -263,19 +282,22 @@ export default function PreviewPage() {
                     variant="outline"
                     size="sm"
                     onClick={handleSignOut}
+                    className="transition-all duration-150 hover:-translate-y-0.5 active:scale-95"
                   >
                     Sign Out
                   </Button>
                 </div>
               )}
-              <Badge variant="secondary">Step 3 of 5</Badge>
+              <Badge variant="secondary" className="w-fit self-start sm:self-auto">
+                Step 3 of 5
+              </Badge>
             </div>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="container mx-auto px-4 py-12">
+      <main className="container mx-auto px-4 sm:px-6 py-12">
         <div className="max-w-4xl mx-auto">
           {/* Header */}
           <div className="text-center mb-8">
@@ -291,15 +313,18 @@ export default function PreviewPage() {
           {/* Match Results */}
           <div className="grid gap-6 mb-8">
             {matches.map((match, index) => (
-              <Card key={`match-${match.id}-${index}`} className="hover:shadow-md transition-shadow">
+              <Card
+                key={`match-${match.id}-${index}`}
+                className="transition-all duration-200 hover:-translate-y-1 hover:shadow-lg"
+              >
                 <CardContent className="p-6">
-                  <div className="flex items-start space-x-4">
+                  <div className="flex flex-col gap-4 md:flex-row md:items-start md:space-x-4">
                     <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold">
                       {match.name.charAt(0)}
                     </div>
                     
-                    <div className="flex-1">
-                      <div className="flex items-start justify-between mb-2">
+                    <div className="flex-1 space-y-4">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div>
                           <h3 className="text-lg font-semibold text-gray-900">{match.name}</h3>
                           <p className="text-gray-600">{match.title}</p>
@@ -308,15 +333,25 @@ export default function PreviewPage() {
                             <Button 
                               size="sm"
                               variant="secondary" 
-                              className="text-xs h-6 px-2"
+                              className="text-xs h-7 px-3 transition-all duration-150 hover:-translate-y-0.5 active:scale-95"
                               onClick={handleContinue}
+                              disabled={isCheckingAccess}
                             >
-                              <EyeOff className="w-3 h-3 mr-1" />
-                              Unlock to see
+                              {isCheckingAccess ? (
+                                <span className="flex items-center gap-2">
+                                  <Spinner className="h-3 w-3" />
+                                  <span>Checking...</span>
+                                </span>
+                              ) : (
+                                <span className="flex items-center gap-1">
+                                  <EyeOff className="w-3 h-3" />
+                                  <span>Unlock to see</span>
+                                </span>
+                              )}
                             </Button>
                           </div>
                         </div>
-                        <Badge variant="outline" className="text-green-600 border-green-200">
+                        <Badge variant="outline" className="text-green-600 border-green-200 self-start">
                           {Math.round(match.score * 100)}% match
                         </Badge>
                       </div>
@@ -329,16 +364,26 @@ export default function PreviewPage() {
 
                       <div className="mb-4">
                         <div className="bg-gray-50 p-3 rounded-lg">
-                          <div className="flex items-center space-x-2 mb-2">
+                          <div className="flex flex-wrap items-center gap-2 mb-2">
                             <span className="text-sm font-medium text-gray-700">Email draft ready:</span>
                             <Button 
                               size="sm"
                               variant="secondary" 
-                              className="text-xs h-6 px-2"
+                              className="text-xs h-7 px-3 transition-all duration-150 hover:-translate-y-0.5 active:scale-95"
                               onClick={handleContinue}
+                              disabled={isCheckingAccess}
                             >
-                              <EyeOff className="w-3 h-3 mr-1" />
-                              Preview
+                              {isCheckingAccess ? (
+                                <span className="flex items-center gap-2">
+                                  <Spinner className="h-3 w-3" />
+                                  <span>Loading…</span>
+                                </span>
+                              ) : (
+                                <span className="flex items-center gap-1">
+                                  <EyeOff className="w-3 h-3" />
+                                  <span>Preview</span>
+                                </span>
+                              )}
                             </Button>
                           </div>
                           <p className="text-sm text-gray-500 blur-sm select-none">
@@ -347,16 +392,17 @@ export default function PreviewPage() {
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-between text-sm">
-                        <div className="flex items-center space-x-2">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between text-sm">
+                        <div className="flex items-center gap-2">
                           <span className="text-gray-500">Contact:</span>
                           <code className="bg-gray-100 px-2 py-1 rounded text-xs">{match.email_masked}</code>
                         </div>
-                        <div className="flex items-center space-x-2">
+                        <div className="flex items-center gap-2">
                           <Button
                             size="sm"
                             variant="ghost"
                             onClick={() => handleFeedback(match.id, true)}
+                            className="transition-transform duration-150 hover:-translate-y-0.5 active:scale-95"
                           >
                             <ThumbsUp className="w-4 h-4" />
                           </Button>
@@ -364,6 +410,7 @@ export default function PreviewPage() {
                             size="sm"
                             variant="ghost"
                             onClick={() => handleFeedback(match.id, false)}
+                            className="transition-transform duration-150 hover:-translate-y-0.5 active:scale-95"
                           >
                             <ThumbsDown className="w-4 h-4" />
                           </Button>
@@ -406,10 +453,20 @@ export default function PreviewPage() {
                 <Button 
                   onClick={handleContinue}
                   size="lg"
-                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                  disabled={isCheckingAccess}
+                  className="bg-blue-600 hover:bg-blue-700 text-white transition-transform duration-150 hover:-translate-y-0.5 active:scale-95"
                 >
-                  <CreditCard className="w-4 h-4 mr-2" />
-                  Unlock Full Access
+                  {isCheckingAccess ? (
+                    <span className="flex items-center gap-3">
+                      <Spinner size="sm" className="text-white" />
+                      <span>Processing...</span>
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-2">
+                      <CreditCard className="w-4 h-4" />
+                      <span>Unlock Full Access</span>
+                    </span>
+                  )}
                 </Button>
                 <p className="text-xs text-blue-700 mt-2">
                   Starting at $29/month • Cancel anytime • Money-back guarantee

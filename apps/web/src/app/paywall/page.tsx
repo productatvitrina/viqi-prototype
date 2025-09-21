@@ -3,7 +3,7 @@
  */
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, Check, CreditCard, Zap, Crown } from "lucide-react";
 import { flowConfig, getNextStep, getStepRoute } from "@/config/flow.config";
 import { api, makeAuthenticatedRequest, getCurrentUser } from "@/lib/api";
+import Spinner from "@/components/ui/spinner";
 import { toast } from "sonner";
 
 interface Plan {
@@ -43,9 +44,17 @@ export default function PaywallPage() {
   const [error, setError] = useState<string | null>(null);
   const [currentMatchId, setCurrentMatchId] = useState<string | null>(null);
   const [customUser, setCustomUser] = useState<any>(null);
+  const [pendingCredit, setPendingCredit] = useState<number | null>(null);
+  const isMountedRef = useRef(true);
 
   const { data: session } = useSession();
   const router = useRouter();
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   // Check for custom email auth
   useEffect(() => {
@@ -179,6 +188,7 @@ export default function PaywallPage() {
       toast.error("Please sign in to continue", {
         description: "Authentication is required to purchase a subscription."
       });
+      setPendingCredit(null);
       router.push("/auth/signin");
       return;
     }
@@ -191,6 +201,7 @@ export default function PaywallPage() {
       return;
     }
 
+    setPendingCredit(null);
     setIsLoading(true);
     setSelectedPlan(planName);
 
@@ -210,6 +221,8 @@ export default function PaywallPage() {
       return;
     }
 
+    let redirected = false;
+
     try {
       const response = await makeAuthenticatedRequest(() =>
         api.payments.createCheckout({
@@ -228,6 +241,7 @@ export default function PaywallPage() {
 
       // Redirect to Stripe checkout
       if (response.checkout_url) {
+        redirected = true;
         window.location.href = response.checkout_url;
       } else {
         throw new Error("No checkout URL received");
@@ -238,7 +252,10 @@ export default function PaywallPage() {
       toast.error("Checkout failed", {
         description: err.message || "Please try again or contact support."
       });
-      setIsLoading(false);
+    } finally {
+      if (!redirected && isMountedRef.current) {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -250,6 +267,7 @@ export default function PaywallPage() {
 
     if (!isAuthenticated) {
       toast.error("Please sign in to continue");
+      setPendingCredit(null);
       router.push("/auth/signin");
       return;
     }
@@ -260,7 +278,10 @@ export default function PaywallPage() {
       userEmail
     });
 
+    setPendingCredit(credits);
     setIsLoading(true);
+
+    let redirected = false;
 
     try {
       const response = await makeAuthenticatedRequest(() =>
@@ -275,6 +296,7 @@ export default function PaywallPage() {
       }
 
       if (response.checkout_url) {
+        redirected = true;
         window.location.href = response.checkout_url;
       } else {
         throw new Error("No checkout URL received");
@@ -285,7 +307,11 @@ export default function PaywallPage() {
       toast.error("Purchase failed", {
         description: err.message || "Please try again or contact support."
       });
-      setIsLoading(false);
+    } finally {
+      if (!redirected && isMountedRef.current) {
+        setIsLoading(false);
+        setPendingCredit(null);
+      }
     }
   };
 
@@ -323,31 +349,31 @@ export default function PaywallPage() {
       {/* Header */}
       <header className="border-b bg-white/80 backdrop-blur-sm">
         <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap items-center gap-3">
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => router.back()}
-                className="flex items-center space-x-2"
+                className="flex items-center gap-2 transition-all duration-150 hover:-translate-y-0.5 active:scale-95"
               >
                 <ArrowLeft className="w-4 h-4" />
                 <span>Back</span>
               </Button>
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center gap-2">
                 <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
                   <span className="text-white font-bold text-lg">V</span>
                 </div>
                 <span className="text-xl font-bold text-gray-900">ViQi AI</span>
               </div>
             </div>
-            <Badge variant="secondary">Step 4 of 5</Badge>
+            <Badge variant="secondary" className="w-fit self-start sm:self-auto">Step 4 of 5</Badge>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="container mx-auto px-4 py-12">
+      <main className="container mx-auto px-4 sm:px-6 py-12">
         <div className="max-w-6xl mx-auto">
           {/* Header */}
           <div className="text-center mb-12">
@@ -400,7 +426,12 @@ export default function PaywallPage() {
               const isPopular = plan.name === "Pro";
 
               return (
-                <Card key={plan.id} className={`relative ${isPopular ? "border-blue-500 shadow-lg scale-105" : ""}`}>
+                <Card
+                  key={plan.id}
+                  className={`relative transition-all duration-200 hover:-translate-y-1 hover:shadow-xl ${
+                    isPopular ? "border-blue-500 shadow-lg scale-105" : ""
+                  }`}
+                >
                   {isPopular && (
                     <Badge className="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white">
                       Most Popular
@@ -464,7 +495,7 @@ export default function PaywallPage() {
                     <Button
                       onClick={() => handleSubscribe(plan.name)}
                       disabled={isLoading && selectedPlan === plan.name}
-                      className={`w-full ${
+                      className={`w-full transition-transform duration-150 hover:-translate-y-0.5 active:scale-95 ${
                         isPopular 
                           ? "bg-blue-600 hover:bg-blue-700 text-white" 
                           : "bg-gray-900 hover:bg-gray-800 text-white"
@@ -472,15 +503,15 @@ export default function PaywallPage() {
                       size="lg"
                     >
                       {isLoading && selectedPlan === plan.name ? (
-                        <div className="flex items-center space-x-2">
-                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <span className="flex items-center gap-2">
+                          <Spinner className="text-white" />
                           <span>Processing...</span>
-                        </div>
+                        </span>
                       ) : (
-                        <div className="flex items-center space-x-2">
+                        <span className="flex items-center gap-2">
                           <CreditCard className="w-4 h-4" />
                           <span>Choose {plan.name}</span>
-                        </div>
+                        </span>
                       )}
                     </Button>
 
@@ -500,27 +531,51 @@ export default function PaywallPage() {
               <p className="text-center text-gray-600">Purchase credits without a subscription</p>
             </CardHeader>
             <CardContent>
-              <div className="flex justify-center space-x-4">
+              <div className="flex flex-wrap justify-center gap-3">
                 <Button
                   onClick={() => handleCreditPurchase(1)}
                   variant="outline"
                   disabled={isLoading}
+                  className="transition-all duration-150 hover:-translate-y-0.5 active:scale-95"
                 >
-                  1 Credit - $1.00
+                  {isLoading && pendingCredit === 1 ? (
+                    <span className="flex items-center gap-2">
+                      <Spinner />
+                      <span>Processing...</span>
+                    </span>
+                  ) : (
+                    "1 Credit - $1.00"
+                  )}
                 </Button>
                 <Button
                   onClick={() => handleCreditPurchase(5)}
                   variant="outline"
                   disabled={isLoading}
+                  className="transition-all duration-150 hover:-translate-y-0.5 active:scale-95"
                 >
-                  5 Credits - $4.50
+                  {isLoading && pendingCredit === 5 ? (
+                    <span className="flex items-center gap-2">
+                      <Spinner />
+                      <span>Processing...</span>
+                    </span>
+                  ) : (
+                    "5 Credits - $4.50"
+                  )}
                 </Button>
                 <Button
                   onClick={() => handleCreditPurchase(10)}
                   variant="outline"
                   disabled={isLoading}
+                  className="transition-all duration-150 hover:-translate-y-0.5 active:scale-95"
                 >
-                  10 Credits - $8.50
+                  {isLoading && pendingCredit === 10 ? (
+                    <span className="flex items-center gap-2">
+                      <Spinner />
+                      <span>Processing...</span>
+                    </span>
+                  ) : (
+                    "10 Credits - $8.50"
+                  )}
                 </Button>
               </div>
             </CardContent>
@@ -537,7 +592,7 @@ export default function PaywallPage() {
               <Button
                 onClick={handleDemo}
                 variant="outline"
-                className="border-yellow-300 text-yellow-800 hover:bg-yellow-100"
+                className="border-yellow-300 text-yellow-800 hover:bg-yellow-100 transition-all duration-150 hover:-translate-y-0.5 active:scale-95"
               >
                 Continue Demo (No Payment)
               </Button>
