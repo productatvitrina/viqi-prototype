@@ -4,12 +4,12 @@
  */
 
 export const flowConfig = {
-  // Updated flow: Landing → SSO → Processing (Gemini API) → Preview → Paywall → Reveal
+  // Updated flow: Landing → SSO → Processing (OpenAI API) → Preview → Paywall → Reveal
   steps: [
     "landing",           // Hero page with "What are you looking for?"
     "intent",            // Optional intent refinement step (enabled by feature flag)
     "sso_optional",      // Google/LinkedIn SSO (required after query)
-    "processing",        // Gemini API call + progress indicator
+    "processing",        // OpenAI API call + progress indicator
     "preview",           // Masked matches + blurred email drafts
     "paywall",           // Stripe Checkout (required to unlock)
     "reveal",            // Full details + copy/send buttons

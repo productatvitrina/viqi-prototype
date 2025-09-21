@@ -1,4 +1,4 @@
-"""Simplified matching routes for POC - Direct Gemini API calls only.
+"""Simplified matching routes for POC – direct OpenAI (or configured LLM) calls.
 
 Adds metered credit tracking using Stripe usage records while keeping the
 session-only architecture (no database persistence).
@@ -230,8 +230,8 @@ def blur_company_name(company: str) -> str:
     return ' '.join(blurred_words)
 
 
-async def call_gemini_api(query: str, user_company: Optional[str] = None) -> list[Dict[str, Any]]:
-    """Call the configured LLM provider to get matching recommendations."""
+async def call_llm_api(query: str, user_company: Optional[str] = None) -> list[Dict[str, Any]]:
+    """Call the configured LLM provider (default OpenAI) to get matching recommendations."""
 
     prompt = f"""
 You are an AI assistant for the film and TV industry. A user is asking: "{query}"
@@ -264,7 +264,11 @@ Return ONLY a valid JSON array with this structure:
 
     try:
         results = await llm_provider.generate_json_array(prompt=prompt)
-        logger.info("Successfully parsed %d results from %s", len(results), llm_provider.provider_name)
+        logger.info(
+            "Successfully parsed %d results from %s",
+            len(results),
+            llm_provider.provider_name,
+        )
         return results
     except LLMProviderError as exc:
         logger.warning("LLM provider unavailable (%s); using mock results", exc)
@@ -300,7 +304,7 @@ async def estimate_credit_cost(query: str) -> int:
 
 @router.post("/match", response_model=MatchResponse)
 async def create_match_poc(request: MatchRequest):
-    """Create a match using direct Gemini API call - POC version."""
+    """Create a match using the configured LLM provider (OpenAI by default)."""
     logger.info(f"🎯 POC Match request received: {request.query}")
     logger.info(f"📧 User email: {request.user_email}")
     logger.info(f"🔢 Max results: {request.max_results}")
@@ -330,7 +334,7 @@ async def create_match_poc(request: MatchRequest):
             else None
         )
 
-        # Determine credit cost via Gemini (or heuristic)
+        # Determine credit cost via the LLM (or heuristic fallback)
         credits_charged = await estimate_credit_cost(request.query)
         logger.info(
             "🧮 Credit cost determined",
@@ -338,10 +342,14 @@ async def create_match_poc(request: MatchRequest):
             subscription_present=is_paid,
         )
 
-        # Call Gemini API
-        logger.info("🤖 Calling Gemini API...")
-        gemini_results = await call_gemini_api(request.query, user_company)
-        logger.info(f"✅ Gemini API returned {len(gemini_results)} results")
+        # Call OpenAI (or whichever provider is configured)
+        logger.info("🤖 Calling OpenAI (or configured LLM) API...")
+        llm_results = await call_llm_api(request.query, user_company)
+        logger.info(
+            "✅ LLM response returned %d results via %s",
+            len(llm_results),
+            llm_provider.provider_name,
+        )
 
         credit_summary_payload: Optional[CreditSummary] = None
         if subscription_info:
@@ -376,7 +384,7 @@ async def create_match_poc(request: MatchRequest):
             credit_summary_payload = None
 
         return _build_match_response(
-            results_source=gemini_results,
+            results_source=llm_results,
             request=request,
             user_company=user_company,
             is_paid=is_paid,
@@ -414,5 +422,6 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "viqi-matching-poc",
-        "gemini_configured": bool(model)
+        "llm_provider": llm_provider.provider_name,
+        "openai_configured": llm_provider.provider_name == "openai",
     }

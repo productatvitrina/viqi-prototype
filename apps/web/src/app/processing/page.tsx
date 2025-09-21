@@ -1,5 +1,5 @@
 /**
- * Processing page - Makes Gemini API call right after auth
+ * Processing page - Makes OpenAI API call right after auth
  */
 "use client";
 
@@ -73,12 +73,12 @@ export default function ProcessingPage() {
         await new Promise(resolve => setTimeout(resolve, 1000));
         console.log("✅ Step 1 completed");
 
-        // Step 2: Make Gemini API call
+        // Step 2: Make OpenAI API call
         console.log("⏱️ Step 2: API call - setting progress to 50%");
         setProgress(50);
         setCurrentStep("Finding the best matches for you...");
         
-        console.log("📡 Making Gemini API call (POC)...");
+        console.log("📡 Making OpenAI API call (POC)...");
         console.log("🔍 API Debug info:", {
           baseURL: process.env.NEXT_PUBLIC_API_BASE_URL,
           fullURL: `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/matching-poc/match`,
@@ -100,7 +100,7 @@ export default function ProcessingPage() {
           return res;
         });
 
-        console.log("✅ Gemini API response received:", {
+        console.log("✅ OpenAI API response received:", {
           resultCount: matchResponse?.results?.length,
           userCompany: matchResponse?.user_company,
           queryProcessed: matchResponse?.query_processed
