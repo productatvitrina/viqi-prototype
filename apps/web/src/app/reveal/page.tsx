@@ -3,7 +3,7 @@
  */
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
@@ -25,7 +25,18 @@ interface PersonRevealed {
   score: number;
 }
 
-export default function RevealPagePOC() {
+function RevealLoading() {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+        <p className="text-gray-600">Loading your contacts...</p>
+      </div>
+    </div>
+  );
+}
+
+function RevealContent() {
   const [matches, setMatches] = useState<PersonRevealed[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -233,14 +244,7 @@ export default function RevealPagePOC() {
   };
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading your contacts...</p>
-        </div>
-      </div>
-    );
+    return <RevealLoading />;
   }
 
   if (error) {
@@ -394,5 +398,13 @@ export default function RevealPagePOC() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function RevealPage() {
+  return (
+    <Suspense fallback={<RevealLoading />}>
+      <RevealContent />
+    </Suspense>
   );
 }
