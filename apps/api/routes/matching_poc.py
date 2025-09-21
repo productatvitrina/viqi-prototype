@@ -95,6 +95,49 @@ class MatchResponse(BaseModel):
     revealed: bool
 
 
+def _build_match_response(
+    *,
+    results_source: list[Dict[str, Any]],
+    request: MatchRequest,
+    user_company: Optional[str],
+    is_paid: bool,
+) -> MatchResponse:
+    match_results: list[MatchResult] = []
+
+    for i, result in enumerate(results_source[: request.max_results]):
+        logger.info(f"📝 Processing result {i + 1}: {result.get('name', 'Unknown')}")
+        company_name = result.get("company", "Media Company")
+        plain_email = result.get("email", f"contact{i + 1}@company.com")
+
+        match_results.append(
+            MatchResult(
+                name=result.get("name", f"Contact {i + 1}"),
+                title=result.get("title", "Industry Professional"),
+                company_name=company_name,
+                company_blurred=company_name if is_paid else blur_company_name(company_name),
+                email_plain=plain_email if is_paid else "",
+                email_masked=plain_email if is_paid else mask_email(plain_email),
+                reason=result.get("reason", "Industry professional with relevant experience"),
+                email_draft=result.get("email_draft", "Professional outreach email"),
+                score=0.9 - (i * 0.1),
+            )
+        )
+
+    logger.bind(
+        count=len(match_results),
+        paid=is_paid,
+        user_company=user_company,
+        query=request.query[:80],
+    ).info("🎉 Returning matches")
+
+    return MatchResponse(
+        results=match_results,
+        user_company=user_company,
+        query_processed=request.query,
+        revealed=is_paid,
+    )
+
+
 def get_company_from_email(email: str) -> Optional[str]:
     """Extract company from email domain."""
     if not email or '@' not in email:
@@ -262,7 +305,7 @@ def _is_paid_customer_by_email(email: str) -> bool:
                     return True
         return False
     except Exception as e:
-        logger.error(f"Stripe paid check failed for {email}: {e}")
+        logger.exception(f"Stripe paid check failed for {email}")
         return False
 
 
@@ -285,48 +328,39 @@ async def create_match_poc(request: MatchRequest):
         # Determine paid status by querying Stripe using email
         is_paid = _is_paid_customer_by_email(request.user_email)
         logger.info(f"💳 Paid status for {request.user_email}: {is_paid}")
-        
+
         # Call Gemini API
         logger.info("🤖 Calling Gemini API...")
         gemini_results = await call_gemini_api(request.query, user_company)
         logger.info(f"✅ Gemini API returned {len(gemini_results)} results")
-        
-        # Convert to response format
-        match_results = []
-        for i, result in enumerate(gemini_results[:request.max_results]):
-            logger.info(f"📝 Processing result {i+1}: {result.get('name', 'Unknown')}")
-            company_name = result.get("company", "Media Company")
-            plain_email = result.get("email", f"contact{i+1}@company.com")
 
-            # Reveal logic: if paid, return unblurred company and plain email.
-            # If not paid, return blurred company and masked email, suppressing plain email.
-            match_result = MatchResult(
-                name=result.get("name", f"Contact {i+1}"),
-                title=result.get("title", "Industry Professional"),
-                company_name=company_name,
-                company_blurred=company_name if is_paid else blur_company_name(company_name),
-                email_plain=plain_email if is_paid else "",
-                email_masked=plain_email if is_paid else mask_email(plain_email),
-                reason=result.get("reason", "Industry professional with relevant experience"),
-                email_draft=result.get("email_draft", "Professional outreach email"),
-                score=0.9 - (i * 0.1)  # Simple scoring
-            )
-            match_results.append(match_result)
-        
-        response = MatchResponse(
-            results=match_results,
+        return _build_match_response(
+            results_source=gemini_results,
+            request=request,
             user_company=user_company,
-            query_processed=request.query,
-            revealed=is_paid
+            is_paid=is_paid,
         )
-        
-        logger.info(f"🎉 Successfully returning {len(match_results)} matches for POC")
-        logger.info(f"📋 Response summary: user_company={user_company}, query_processed={request.query}")
-        return response
-        
-    except Exception as e:
-        logger.error(f"POC match creation failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+
+    except Exception:
+        logger.exception("POC match creation failed; returning fallback results")
+
+        fallback_user_company = (
+            get_company_from_email(request.user_email) if request.user_email else None
+        )
+
+        fallback_is_paid = False
+        if request.user_email:
+            try:
+                fallback_is_paid = _is_paid_customer_by_email(request.user_email)
+            except Exception:
+                fallback_is_paid = False
+
+        return _build_match_response(
+            results_source=MOCK_GEMINI_RESULTS,
+            request=request,
+            user_company=fallback_user_company,
+            is_paid=fallback_is_paid,
+        )
 
 
 @router.get("/health")
