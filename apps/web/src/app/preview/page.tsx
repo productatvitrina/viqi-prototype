@@ -16,6 +16,7 @@ import { flowConfig, getNextStep, getStepRoute } from "@/config/flow.config";
 import { api, makeAuthenticatedRequest, getCurrentUser } from "@/lib/api";
 import Spinner from "@/components/ui/spinner";
 import { toast } from "sonner";
+import CreditsBadge from "@/components/credits-badge";
 
 interface MatchPreview {
   id: number;
@@ -39,6 +40,13 @@ interface MatchResponse {
     total: number;
   };
   status: string;
+  credits_charged?: number | null;
+  credit_summary?: {
+    included_credits?: number;
+    remaining_credits?: number;
+    projected_remaining_credits?: number;
+    pending_credits?: number;
+  } | null;
 }
 
 export default function PreviewPage() {
@@ -76,6 +84,13 @@ export default function PreviewPage() {
       sessionStorage.removeItem('userEmail');
       sessionStorage.removeItem('backendToken');
       sessionStorage.removeItem('businessDomain');
+      sessionStorage.removeItem('creditSummary');
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("viqi:sign-out"));
+      }
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("viqi:sign-out"));
+      }
     } catch (err) {
       console.warn('Failed to remove session auth keys', err);
     }
@@ -114,6 +129,11 @@ export default function PreviewPage() {
         // Set the match data
         setMatchData(matchResponse);
         setMatches(matchResponse.results);
+
+        if (matchResponse.credit_summary) {
+          sessionStorage.setItem("creditSummary", JSON.stringify(matchResponse.credit_summary));
+          window.dispatchEvent(new Event("viqi:credits-updated"));
+        }
         
         console.log("✅ Preview loaded with", matchResponse.results.length, "matches");
 
@@ -198,6 +218,9 @@ export default function PreviewPage() {
               </div>
               <span className="text-xl font-bold text-gray-900">ViQi AI</span>
             </div>
+            <div className="flex items-center gap-2">
+              <CreditsBadge />
+            </div>
             <Badge variant="secondary" className="w-fit self-start sm:self-auto">Step 3 of 5</Badge>
           </div>
         </div>
@@ -273,6 +296,7 @@ export default function PreviewPage() {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-3 justify-between sm:justify-end">
+              <CreditsBadge />
               {(session?.user || customUser) && (
                 <div className="flex items-center gap-3">
                   <span className="text-sm text-gray-600">
@@ -309,6 +333,21 @@ export default function PreviewPage() {
               Preview connections based on your requirements. Unlock full details to connect.
             </p>
           </div>
+
+          {matchData?.credit_summary && (
+            <Card className="mb-6 border-blue-200 bg-blue-50/40">
+              <CardContent className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm text-blue-900 font-semibold">
+                    Credits used for this query: {matchData.credits_charged ?? matchData.credit_cost ?? 0}
+                  </p>
+                  <p className="text-xs text-blue-800">
+                    Remaining balance: {matchData.credit_summary?.projected_remaining_credits ?? matchData.credit_summary?.remaining_credits ?? 0} / {matchData.credit_summary?.included_credits ?? 0}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Match Results */}
           <div className="grid gap-6 mb-8">

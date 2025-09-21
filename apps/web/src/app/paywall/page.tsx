@@ -15,6 +15,7 @@ import { flowConfig, getNextStep, getStepRoute } from "@/config/flow.config";
 import { api, makeAuthenticatedRequest, getCurrentUser } from "@/lib/api";
 import Spinner from "@/components/ui/spinner";
 import { toast } from "sonner";
+import CreditsBadge from "@/components/credits-badge";
 
 interface Plan {
   id: number;
@@ -367,7 +368,10 @@ export default function PaywallPage() {
                 <span className="text-xl font-bold text-gray-900">ViQi AI</span>
               </div>
             </div>
-            <Badge variant="secondary" className="w-fit self-start sm:self-auto">Step 4 of 5</Badge>
+            <div className="flex items-center gap-3">
+              <CreditsBadge />
+              <Badge variant="secondary" className="w-fit self-start sm:self-auto">Step 4 of 5</Badge>
+            </div>
           </div>
         </div>
       </header>

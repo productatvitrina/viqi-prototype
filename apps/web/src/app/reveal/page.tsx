@@ -13,6 +13,8 @@ import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, Copy, Mail, CheckCircle, Star, Building } from "lucide-react";
 import { toast } from "sonner";
 import { api, getCurrentUser } from "@/lib/api";
+import CreditsBadge from "@/components/credits-badge";
+import useCredits from "@/hooks/useCredits";
 
 interface PersonRevealed {
   id: number;
@@ -48,6 +50,7 @@ function RevealContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const sessionId = searchParams?.get("session_id") ?? null;
+  const { creditSummary } = useCredits(false);
 
   const mapToRevealedMatches = (results: any[]): PersonRevealed[] =>
     results.map((result: any, index: number) => ({
@@ -184,14 +187,21 @@ function RevealContent() {
       const pocResults = {
         match_id: Date.now(),
         results: refreshed.results,
-        credit_cost: 1,
+        credit_cost: refreshed?.credits_charged ?? 0,
         token_usage: { prompt: 0, completion: 0, total: 0 },
         status: refreshed.revealed ? "revealed" : "preview",
         user_company: refreshed.user_company,
+        credit_summary: refreshed.credit_summary ?? null,
+        credits_charged: refreshed?.credits_charged ?? null,
       };
 
       sessionStorage.setItem("currentMatchId", pocResults.match_id.toString());
       sessionStorage.setItem("matchResults", JSON.stringify(pocResults));
+
+      if (refreshed.credit_summary) {
+        sessionStorage.setItem("creditSummary", JSON.stringify(refreshed.credit_summary));
+        window.dispatchEvent(new Event("viqi:credits-updated"));
+      }
 
       const revealedMatches = mapToRevealedMatches(pocResults.results);
       setMatches(revealedMatches);
@@ -204,6 +214,14 @@ function RevealContent() {
       } else {
         toast.info("Preview updated", {
           description: "You still need to complete payment to unlock full details.",
+        });
+      }
+
+      if (refreshed.credits_charged) {
+        toast.success(`Used ${refreshed.credits_charged} credits`, {
+          description: refreshed.credit_summary
+            ? `Updated balance: ${refreshed.credit_summary.projected_remaining_credits ?? refreshed.credit_summary.remaining_credits ?? 0} credits remaining`
+            : undefined,
         });
       }
     } catch (err: any) {
@@ -275,10 +293,13 @@ function RevealContent() {
               </div>
               <span className="text-xl font-bold text-gray-900">ViQi AI</span>
             </div>
-            <Badge variant="secondary" className="bg-green-100 text-green-800">
-              <CheckCircle className="w-3 h-3 mr-1" />
-              Revealed
-            </Badge>
+            <div className="flex items-center gap-2">
+              <CreditsBadge />
+              <Badge variant="secondary" className="bg-green-100 text-green-800">
+                <CheckCircle className="w-3 h-3 mr-1" />
+                Revealed
+              </Badge>
+            </div>
           </div>
         </div>
       </header>
@@ -304,6 +325,21 @@ function RevealContent() {
               Full contact details and personalized outreach emails for {matches.length} relevant professionals.
             </p>
           </div>
+
+          {creditSummary && (
+            <Card className="mb-6 border-green-200 bg-green-50/40">
+              <CardContent className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-green-900">
+                    Current balance: {creditSummary.projected_remaining_credits ?? creditSummary.remaining_credits ?? 0} / {creditSummary.included_credits ?? 0} credits
+                  </p>
+                  <p className="text-xs text-green-800">
+                    Total used this period: {creditSummary.used_credits ?? 0} credits
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Contacts Grid */}
           <div className="grid gap-6 md:grid-cols-2">

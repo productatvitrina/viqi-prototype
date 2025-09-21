@@ -17,8 +17,9 @@ aiohttp==3.12.15
 # Payments (for Stripe payment checks)
 stripe==8.5.0
 
-# LLM Integration (for Gemini API)
+# LLM Integration
 google-generativeai==0.3.2
+openai==1.35.10
 
 # Logging and monitoring
 loguru==0.7.2

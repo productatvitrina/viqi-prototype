@@ -12,6 +12,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { flowConfig, getNextStep, getStepRoute } from "@/config/flow.config";
 import { getCurrentUser } from "@/lib/api";
+import CreditsBadge from "@/components/credits-badge";
 
 export default function HomePage() {
   const [query, setQuery] = useState("");
@@ -30,6 +31,10 @@ export default function HomePage() {
       sessionStorage.removeItem('userEmail');
       sessionStorage.removeItem('backendToken');
       sessionStorage.removeItem('businessDomain');
+      sessionStorage.removeItem('creditSummary');
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('viqi:sign-out'));
+      }
     } catch (err) {
       console.warn('Failed to remove session auth keys', err);
     }
@@ -104,20 +109,23 @@ export default function HomePage() {
               <span className="text-xl font-bold text-gray-900">ViQi AI</span>
               <Badge variant="secondary" className="ml-2">Preview</Badge>
             </div>
-            {(session?.user || customUser) ? (
-              <div className="flex items-center space-x-3">
-                <span className="text-sm text-gray-600">
-                  Hi, {session?.user?.name?.split(' ')[0] || customUser?.name}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleSignOut}
-                >
-                  Sign Out
-                </Button>
-              </div>
-            ) : null}
+            <div className="flex items-center space-x-3">
+              <CreditsBadge />
+              {(session?.user || customUser) ? (
+                <>
+                  <span className="text-sm text-gray-600">
+                    Hi, {session?.user?.name?.split(' ')[0] || customUser?.name}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSignOut}
+                  >
+                    Sign Out
+                  </Button>
+                </>
+              ) : null}
+            </div>
           </div>
         </div>
       </header>

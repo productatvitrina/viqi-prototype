@@ -1,24 +1,31 @@
 """Simplified matching routes for POC - Direct Gemini API calls only.
 
-Implements session-level sign-in using email only (no DB/JWT) and a Stripe
-paid check by email to decide whether to return blurred or revealed results.
+Adds metered credit tracking using Stripe usage records while keeping the
+session-only architecture (no database persistence).
 """
 import os
+import re
 import json
 import asyncio
 from typing import Optional, Dict, Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from loguru import logger
-import google.generativeai as genai
 import stripe
 from datetime import datetime, timezone
 
+from services.llm_provider import llm_provider, LLMProviderError
+from services.stripe_metering import (
+    get_subscription_info_for_email,
+    get_usage_summary,
+    project_credit_balances,
+    record_usage,
+)
+
 router = APIRouter()
 
-# Configure Gemini - For POC, we'll use mock responses
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-MOCK_GEMINI_RESULTS = [
+# Default mock results used when LLM provider fails
+MOCK_LLM_RESULTS = [
     {
         "name": "Sarah Martinez",
         "title": "Director of Content Acquisition",
@@ -53,18 +60,15 @@ MOCK_GEMINI_RESULTS = [
     }
 ]
 
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel('gemini-1.5-flash')
-    logger.info("Gemini API configured for POC")
-else:
-    logger.info("Using mock responses for POC - no GEMINI_API_KEY")
-    model = None
-
 # Configure Stripe for paid check by email (POC does not use DB)
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 if not stripe.api_key:
     logger.warning("STRIPE_SECRET_KEY not configured - paid checks will be treated as unpaid")
+
+
+CREDIT_COST_MIN = int(os.getenv("CREDIT_COST_MIN", 1))
+CREDIT_COST_MAX = int(os.getenv("CREDIT_COST_MAX", 10))
+CREDIT_COST_DEFAULT = int(os.getenv("CREDIT_COST_DEFAULT", 1))
 
 
 class MatchRequest(BaseModel):
@@ -87,12 +91,31 @@ class MatchResult(BaseModel):
     score: float
 
 
+class CreditSummary(BaseModel):
+    """Credit summary returned to the frontend."""
+
+    included_credits: int
+    used_credits: int
+    remaining_credits: int
+    pending_credits: int
+    projected_used_credits: int
+    projected_remaining_credits: int
+    stripe_customer_id: Optional[str] = None
+    stripe_subscription_id: Optional[str] = None
+    stripe_subscription_item_id: Optional[str] = None
+    period_start: Optional[int] = None
+    period_end: Optional[int] = None
+
+
 class MatchResponse(BaseModel):
     """Match response model."""
+
     results: list[MatchResult]
     user_company: Optional[str]
     query_processed: str
     revealed: bool
+    credits_charged: Optional[int] = None
+    credit_summary: Optional[CreditSummary] = None
 
 
 def _build_match_response(
@@ -101,6 +124,8 @@ def _build_match_response(
     request: MatchRequest,
     user_company: Optional[str],
     is_paid: bool,
+    credits_charged: Optional[int] = None,
+    credit_summary: Optional[CreditSummary] = None,
 ) -> MatchResponse:
     match_results: list[MatchResult] = []
 
@@ -135,6 +160,8 @@ def _build_match_response(
         user_company=user_company,
         query_processed=request.query,
         revealed=is_paid,
+        credits_charged=credits_charged,
+        credit_summary=credit_summary,
     )
 
 
@@ -204,18 +231,17 @@ def blur_company_name(company: str) -> str:
 
 
 async def call_gemini_api(query: str, user_company: Optional[str] = None) -> list[Dict[str, Any]]:
-    """Call Gemini API to get matching recommendations."""
-    
-    # Build the prompt
+    """Call the configured LLM provider to get matching recommendations."""
+
     prompt = f"""
 You are an AI assistant for the film and TV industry. A user is asking: "{query}"
 
 User's company: {user_company if user_company else "Unknown"}
 
-Please provide exactly 4 relevant companies and key contacts that this user should reach out to. 
+Please provide exactly 4 relevant companies and key contacts that this user should reach out to.
 For each contact, provide:
 1. Person's full name
-2. Their job title  
+2. Their job title
 3. Company name
 4. Email address (use realistic format: firstname.lastname@company.com)
 5. Brief reason why this is a good match (2-3 sentences)
@@ -227,7 +253,7 @@ Return ONLY a valid JSON array with this structure:
 [
   {{
     "name": "Sarah Johnson",
-    "title": "VP of Development", 
+    "title": "VP of Development",
     "company": "Netflix",
     "email": "sarah.johnson@netflix.com",
     "reason": "Sarah leads content acquisition at Netflix and specializes in independent films. She has greenlit several similar projects in the past year.",
@@ -236,77 +262,40 @@ Return ONLY a valid JSON array with this structure:
 ]
 """
 
-    if not model:
-        logger.info("Using mock Gemini response")
-        return MOCK_GEMINI_RESULTS
-
     try:
-        logger.info(f"Calling Gemini API with query: {query[:100]}...")
-        timeout_seconds = float(os.getenv("GEMINI_TIMEOUT", 20))
-        response = await asyncio.wait_for(
-            asyncio.to_thread(model.generate_content, prompt),
-            timeout=timeout_seconds
-        )
-        
-        if not response.text:
-            raise Exception("Empty response from Gemini")
-        
-        # Try to extract JSON from the response
-        response_text = response.text.strip()
-        
-        # Remove any markdown formatting
-        if response_text.startswith('```json'):
-            response_text = response_text[7:]
-        if response_text.endswith('```'):
-            response_text = response_text[:-3]
-        
-        # Parse JSON
-        results = json.loads(response_text.strip())
-        
-        if not isinstance(results, list):
-            raise ValueError("Response is not a list")
-        
-        logger.info(f"Successfully parsed {len(results)} results from Gemini")
+        results = await llm_provider.generate_json_array(prompt=prompt)
+        logger.info("Successfully parsed %d results from %s", len(results), llm_provider.provider_name)
         return results
-        
-    except asyncio.TimeoutError:
-        logger.warning("Gemini API call timed out; falling back to mock response")
-        return MOCK_GEMINI_RESULTS
-
-    except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse Gemini JSON response: {e}")
-        logger.error(f"Raw response: {response.text if response else 'No response'}")
-        raise HTTPException(status_code=500, detail="Failed to parse AI response")
-    
-    except Exception as e:
-        logger.error(f"Gemini API call failed: {e}")
-        raise HTTPException(status_code=500, detail=f"AI service error: {str(e)}")
+    except LLMProviderError as exc:
+        logger.warning("LLM provider unavailable (%s); using mock results", exc)
+        return MOCK_LLM_RESULTS
 
 
-def _is_paid_customer_by_email(email: str) -> bool:
-    """Check Stripe to determine if the user (by email) has an active/trialing subscription.
+async def estimate_credit_cost(query: str) -> int:
+    """Estimate credit usage for a query via the configured LLM."""
 
-    POC-only: no DB lookup; purely by email.
-    """
+    if not query:
+        return CREDIT_COST_DEFAULT
+
+    clamp = lambda value: max(CREDIT_COST_MIN, min(CREDIT_COST_MAX, value))
+
+    estimation_prompt = (
+        "You are a senior film and TV operations analyst. "
+        "Rate the complexity of the following request on a scale of "
+        f"{CREDIT_COST_MIN} (trivial) to {CREDIT_COST_MAX} (extremely complex). "
+        "Respond with digits only—no punctuation, words, or explanation.\n\n"
+        f"Request: {query}\n"
+    )
+
     try:
-        if not stripe.api_key:
-            return False
+        raw = await llm_provider.estimate_credit_cost(prompt=estimation_prompt, default=CREDIT_COST_DEFAULT)
+        logger.debug("LLM estimated credit cost: %s", raw)
+        return clamp(raw)
+    except LLMProviderError as exc:
+        logger.warning("Credit estimation provider error: %s", exc)
 
-        # List customers by email (Stripe may return multiple)
-        customers = stripe.Customer.list(email=email, limit=10)
-        now_epoch = int(datetime.now(tz=timezone.utc).timestamp())
-
-        for cust in customers.auto_paging_iter():
-            subs = stripe.Subscription.list(customer=cust.id, status="all", limit=10)
-            for sub in subs.auto_paging_iter():
-                status = sub.get("status")
-                current_period_end = int(sub.get("current_period_end") or 0)
-                if status in ["active", "trialing"] and current_period_end > now_epoch:
-                    return True
-        return False
-    except Exception as e:
-        logger.exception(f"Stripe paid check failed for {email}")
-        return False
+    heuristic = max(len(query.strip()) // 120, CREDIT_COST_DEFAULT)
+    return clamp(heuristic or CREDIT_COST_DEFAULT)
 
 
 @router.post("/match", response_model=MatchResponse)
@@ -325,20 +314,74 @@ async def create_match_poc(request: MatchRequest):
         user_company = get_company_from_email(request.user_email)
         logger.info(f"🏢 Detected user company: {user_company}")
 
-        # Determine paid status by querying Stripe using email
-        is_paid = _is_paid_customer_by_email(request.user_email)
-        logger.info(f"💳 Paid status for {request.user_email}: {is_paid}")
+        # Resolve Stripe subscription details (if any)
+        subscription_info = get_subscription_info_for_email(request.user_email)
+        is_paid = bool(subscription_info)
+        logger.info(
+            "💳 Stripe subscription lookup",
+            email=request.user_email,
+            is_paid=is_paid,
+            subscription_id=getattr(subscription_info, "subscription_id", None),
+        )
+
+        usage_summary = (
+            get_usage_summary(subscription_info.subscription_item_id)
+            if subscription_info
+            else None
+        )
+
+        # Determine credit cost via Gemini (or heuristic)
+        credits_charged = await estimate_credit_cost(request.query)
+        logger.info(
+            "🧮 Credit cost determined",
+            credits_charged=credits_charged,
+            subscription_present=is_paid,
+        )
 
         # Call Gemini API
         logger.info("🤖 Calling Gemini API...")
         gemini_results = await call_gemini_api(request.query, user_company)
         logger.info(f"✅ Gemini API returned {len(gemini_results)} results")
 
+        credit_summary_payload: Optional[CreditSummary] = None
+        if subscription_info:
+            record_usage(
+                subscription_item_id=subscription_info.subscription_item_id,
+                quantity=credits_charged,
+            )
+
+            if usage_summary is None:
+                usage_summary = get_usage_summary(subscription_info.subscription_item_id)
+
+            balances = project_credit_balances(
+                included_credits=subscription_info.included_credits,
+                usage_summary=usage_summary,
+                additional_usage=credits_charged,
+            )
+
+            credit_summary_payload = CreditSummary(
+                included_credits=subscription_info.included_credits,
+                used_credits=balances["used"],
+                remaining_credits=balances["remaining"],
+                pending_credits=balances["pending"],
+                projected_used_credits=balances["projected_used"],
+                projected_remaining_credits=balances["projected_remaining"],
+                stripe_customer_id=subscription_info.customer_id,
+                stripe_subscription_id=subscription_info.subscription_id,
+                stripe_subscription_item_id=subscription_info.subscription_item_id,
+                period_start=usage_summary.period_start if usage_summary else None,
+                period_end=usage_summary.period_end if usage_summary else None,
+            )
+        else:
+            credit_summary_payload = None
+
         return _build_match_response(
             results_source=gemini_results,
             request=request,
             user_company=user_company,
             is_paid=is_paid,
+            credits_charged=credits_charged,
+            credit_summary=credit_summary_payload,
         )
 
     except Exception:
@@ -348,18 +391,20 @@ async def create_match_poc(request: MatchRequest):
             get_company_from_email(request.user_email) if request.user_email else None
         )
 
-        fallback_is_paid = False
-        if request.user_email:
-            try:
-                fallback_is_paid = _is_paid_customer_by_email(request.user_email)
-            except Exception:
-                fallback_is_paid = False
+        fallback_subscription = (
+            get_subscription_info_for_email(request.user_email)
+            if request.user_email
+            else None
+        )
+        fallback_is_paid = bool(fallback_subscription)
 
         return _build_match_response(
-            results_source=MOCK_GEMINI_RESULTS,
+            results_source=MOCK_LLM_RESULTS,
             request=request,
             user_company=fallback_user_company,
             is_paid=fallback_is_paid,
+            credits_charged=None,
+            credit_summary=None,
         )
 
 

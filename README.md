@@ -11,6 +11,7 @@ ViQi is a session-only proof of concept that showcases a full SaaS journey for F
 - **Payments**: Stripe Checkout is used end to end; users who complete payment (or already have an active subscription in Stripe) bypass the paywall on future visits.
 - **Delightful UX**: all actions show hover/tap feedback, buttons disable while processing, and loading states include spinners so the experience feels production-ready on desktop and mobile.
 - **Resilient fallback**: if Gemini or Stripe throw errors, the app gracefully falls back to mock data so the demo never breaks mid-pitch.
+- **Real-time credits**: metered Stripe subscriptions deduct credits on every Gemini call and the UI shows remaining balance immediately.
 
 This POC is intentionally lightweight—drop in real auth, persistence, and richer prompts when you are ready for production.
 
@@ -66,9 +67,17 @@ Create the following `.env` files (or configure these values in Vercel/Render). 
 | `STRIPE_PRICE_ID_STARTER_MONTHLY` etc. | Price IDs for the Starter/Pro plans (monthly + annual) |
 | `APP_BASE_URL` | Public URL of the frontend; used as the default success/cancel redirect for Stripe |
 | `GEMINI_API_KEY` | Optional; enables real Gemini responses |
+| `OPENAI_API_KEY` | Optional; enables OpenAI responses (preferred provider) |
+| `OPENAI_MODEL` | Optional; defaults to `gpt-4o-mini` |
+| `LLM_PROVIDER` | Optional; defaults to OpenAI. Set `LLM_PROVIDER=gemini` to switch back |
+| `CREDIT_COST_MIN` / `CREDIT_COST_MAX` / `CREDIT_COST_DEFAULT` | Bounds and fallback for the LLM-driven credit estimator |
 | `DEBUG=true` | (Optional) enable verbose logging on Render |
 
 > ℹ️ In this session-only POC you do **not** need database credentials. All user data lives in the browser.
+
+### Switching LLM providers
+
+By default the backend uses OpenAI’s GPT-4o mini via `OPENAI_API_KEY`. To switch back to Gemini, set `LLM_PROVIDER=gemini` and provide `GEMINI_API_KEY`. When neither key is available the API falls back to deterministic mock results so the demo continues to run.
 
 ---
 
@@ -125,9 +134,15 @@ The frontend’s `NEXT_PUBLIC_API_BASE_URL` should point to the Render service U
 1. **Ask a question** on the landing page (e.g., “Looking for cinematographers in Iceland”).
 2. **Sign in** via Google or enter an email. The domain is used to infer the user’s company.
 3. **Processing screen** shows progress while Gemini runs; match data is cached in sessionStorage.
-4. **Preview** displays blurred companies/emails and masked outreach copy.
-5. **Click Unlock** → Stripe Checkout opens. After payment, the reveal page loads with full contact data.
-6. **Returning paid users** are detected via Stripe and skip the paywall on future queries.
+4. **Preview** displays blurred companies/emails and masked outreach copy plus a live credit badge showing the deduction for that request.
+5. **Click Unlock** → Stripe Checkout opens. After payment, the reveal page loads with full contact data and refreshed credit balance.
+6. **Returning paid users** are detected via Stripe, their credit balance is rehydrated automatically, and they skip the paywall on future queries.
+
+### Real-time Credit Metering
+
+- Each match request calls a lightweight Gemini prompt to estimate the credit cost (bounded by `CREDIT_COST_MIN`/`MAX`).
+- Stripe usage records are posted immediately against the active metered subscription item so Render/Vercel deployments stay in sync with billing.
+- The frontend reads `/api/users/me/credits` to display remaining, used, and pending credits and stores a session copy for instant updates between screens.
 
 ---
 

@@ -39,26 +39,15 @@ function SignInPageInner() {
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
     setProvider("google");
-    
+
+    const nextStep = getNextStep("sso_optional");
+    const callbackUrl = nextStep ? getStepRoute(nextStep) : "/preview";
+
     try {
-      const result = await signIn("google", {
-        redirect: false,
-        callbackUrl: "/preview" // Default callback, will be adjusted by flow
+      await signIn("google", {
+        redirect: true,
+        callbackUrl,
       });
-      
-      if (result?.ok) {
-        // Wait a moment for session to be established
-        setTimeout(() => {
-          const nextStep = getNextStep("sso_optional");
-          if (nextStep) {
-            router.push(getStepRoute(nextStep));
-          }
-        }, 1000);
-      } else {
-        console.error("Sign-in failed:", result?.error);
-        setIsLoading(false);
-        setProvider(null);
-      }
     } catch (error) {
       console.error("Sign-in error:", error);
       setIsLoading(false);

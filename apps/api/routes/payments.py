@@ -138,6 +138,10 @@ def _build_plans_from_stripe(price_list: Any) -> List[PlanResponse]:
         if price.get("type") != "recurring":
             continue
 
+        recurring = price.get("recurring") or {}
+        if recurring.get("usage_type") != "metered":
+            continue
+
         product = price.get("product")
         if isinstance(product, str):
             try:
@@ -239,7 +243,7 @@ async def create_checkout_session(payload: CreateCheckoutRequest) -> Dict[str, A
     try:
         session = stripe.checkout.Session.create(
             payment_method_types=["card"],
-            line_items=[{"price": price_id, "quantity": 1}],
+            line_items=[{"price": price_id}],
             mode="subscription",
             success_url=f"{success_url}?session_id={{CHECKOUT_SESSION_ID}}",
             cancel_url=cancel_url,

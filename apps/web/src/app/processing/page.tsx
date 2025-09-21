@@ -12,6 +12,7 @@ import { Loader2 } from "lucide-react";
 import { flowConfig, getNextStep, getStepRoute } from "@/config/flow.config";
 import { api, makeAuthenticatedRequest, getCurrentUser } from "@/lib/api";
 import { toast } from "sonner";
+import CreditsBadge from "@/components/credits-badge";
 
 export default function ProcessingPage() {
   const [isProcessing, setIsProcessing] = useState(true);
@@ -115,19 +116,34 @@ export default function ProcessingPage() {
         const pocResults = {
           match_id: Date.now(), // Simple ID for POC
           results: matchResponse.results,
-          credit_cost: 1,
+          credit_cost: matchResponse?.credits_charged ?? 0,
           token_usage: { prompt: 0, completion: 0, total: 0 },
           status: matchResponse.revealed ? "revealed" : "preview",
-          user_company: matchResponse.user_company
+          user_company: matchResponse.user_company,
+          credit_summary: matchResponse.credit_summary ?? null,
+          credits_charged: matchResponse?.credits_charged ?? null
         };
-        
+
         console.log("💾 Storing results in sessionStorage:", {
           matchId: pocResults.match_id,
           resultCount: pocResults.results.length
         });
-        
+
         sessionStorage.setItem("currentMatchId", pocResults.match_id.toString());
         sessionStorage.setItem("matchResults", JSON.stringify(pocResults));
+
+        if (matchResponse.credit_summary) {
+          sessionStorage.setItem("creditSummary", JSON.stringify(matchResponse.credit_summary));
+          window.dispatchEvent(new Event("viqi:credits-updated"));
+        }
+
+        if (matchResponse.credits_charged) {
+          toast.success(`Used ${matchResponse.credits_charged} credits`, {
+            description: matchResponse.credit_summary
+              ? `Projected balance: ${matchResponse.credit_summary?.projected_remaining_credits ?? matchResponse.credit_summary?.remaining_credits ?? 0} credits remaining`
+              : undefined,
+          });
+        }
         
         // Verify storage
         const storedMatchId = sessionStorage.getItem("currentMatchId");
@@ -206,7 +222,10 @@ export default function ProcessingPage() {
               </div>
               <span className="text-xl font-bold text-gray-900">ViQi AI</span>
             </div>
-            <Badge variant="secondary">Processing...</Badge>
+            <div className="flex items-center gap-2">
+              <CreditsBadge />
+              <Badge variant="secondary">Processing...</Badge>
+            </div>
           </div>
         </div>
       </header>

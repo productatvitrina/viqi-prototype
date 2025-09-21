@@ -151,10 +151,10 @@ export const api = {
   users: {
     getDashboard: () =>
       apiClient.get("/api/users/me/dashboard"),
-    
+
     getUsage: () =>
       apiClient.get("/api/users/me/usage"),
-    
+
     adjustCredits: (credits: number) =>
       apiClient.post("/api/users/me/credits/adjust", { credits }),
 
@@ -168,6 +168,19 @@ export const api = {
         } as AxiosRequestConfig["headers"];
       }
       return apiClient.get("/api/users/me/subscription", config);
+    },
+
+    getCredits: (email?: string) => {
+      const config: AxiosRequestConfig = {};
+      if (email) {
+        config.params = { email };
+        config.headers = {
+          ...(config.headers ?? {}),
+          "x-user-email": email,
+        } as AxiosRequestConfig["headers"];
+      }
+
+      return apiClient.get("/api/users/me/credits", config);
     },
   },
 };
