@@ -17,11 +17,19 @@ except Exception:  # pragma: no cover
 router = APIRouter()
 
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY")
+APP_BASE_URL = os.getenv("APP_BASE_URL") or os.getenv("NEXTAUTH_URL")
+DEFAULT_FRONTEND_URL = "https://viqi-prototype-web.vercel.app"
+
 if stripe and STRIPE_SECRET_KEY:
     stripe.api_key = STRIPE_SECRET_KEY
     logger.info("Stripe configured for checkout sessions")
 else:
     logger.warning("Stripe secret key not found. Using demo checkout flow.")
+
+if APP_BASE_URL:
+    logger.info(f"Using {APP_BASE_URL} as frontend base URL for Stripe redirects")
+else:
+    logger.info(f"APP_BASE_URL not set. Falling back to {DEFAULT_FRONTEND_URL}")
 
 
 class CreateCheckoutRequest(BaseModel):
@@ -32,6 +40,11 @@ class CreateCheckoutRequest(BaseModel):
     cancel_url: Optional[str] = None
     customer_email: Optional[str] = None
     price_id: Optional[str] = None
+
+
+class VerifyPaymentRequest(BaseModel):
+    """Request body for verifying a checkout session."""
+    customer_email: Optional[str] = None
 
 
 class PlanResponse(BaseModel):
@@ -189,6 +202,14 @@ def _build_plans_from_stripe(price_list: Any) -> List[PlanResponse]:
     return plans
 
 
+def _get_frontend_url(path: str) -> str:
+    """Build a frontend URL using configured base."""
+    base_url = (APP_BASE_URL or DEFAULT_FRONTEND_URL or "").rstrip("/")
+    if not base_url:
+        base_url = DEFAULT_FRONTEND_URL
+    return f"{base_url}/{path.lstrip('/')}"
+
+
 @router.post("/checkout")
 async def create_checkout_session(payload: CreateCheckoutRequest) -> Dict[str, Any]:
     """Create a Stripe Checkout session or return demo URL."""
@@ -203,8 +224,17 @@ async def create_checkout_session(payload: CreateCheckoutRequest) -> Dict[str, A
         logger.warning("No Stripe price ID configured for plan %s (%s)", payload.plan_name, payload.billing_cycle)
         return {"checkout_url": demo_url, "session_id": "demo-session"}
 
-    success_url = payload.success_url or f"{os.getenv('NEXTAUTH_URL', 'http://localhost:3000')}/reveal"
-    cancel_url = payload.cancel_url or f"{os.getenv('NEXTAUTH_URL', 'http://localhost:3000')}/paywall"
+    success_url = payload.success_url or _get_frontend_url("reveal")
+    cancel_url = payload.cancel_url or _get_frontend_url("paywall")
+
+    logger.bind(
+        plan=payload.plan_name,
+        billing_cycle=payload.billing_cycle,
+        price_id=price_id,
+        success_url=success_url,
+        cancel_url=cancel_url,
+        customer_email=payload.customer_email,
+    ).info("Creating Stripe checkout session")
 
     try:
         session = stripe.checkout.Session.create(
@@ -263,9 +293,74 @@ async def purchase_credits() -> Dict[str, Any]:
 
 
 @router.post("/verify/{session_id}")
-async def verify_payment(session_id: str) -> Dict[str, Any]:
-    logger.info("Verifying payment session %s (demo mode)", session_id)
-    return {"success": False, "message": "Verification not implemented in demo mode"}
+async def verify_payment(session_id: str, payload: VerifyPaymentRequest) -> Dict[str, Any]:
+    """Verify a checkout session directly with Stripe."""
+    logger.bind(session_id=session_id, customer_email=payload.customer_email).info(
+        "Verifying Stripe checkout session"
+    )
+
+    if not (stripe and STRIPE_SECRET_KEY):
+        logger.warning("Stripe not configured; returning demo verification response")
+        return {
+            "success": False,
+            "message": "Stripe not configured",
+            "session_id": session_id,
+        }
+
+    try:
+        session = stripe.checkout.Session.retrieve(
+            session_id,
+            expand=["customer", "subscription"],
+        )
+        payment_status = session.get("payment_status")
+        session_status = session.get("status")
+        stripe_customer = session.get("customer")
+        subscription = session.get("subscription")
+        customer_details = session.get("customer_details") or {}
+        email_from_session = customer_details.get("email")
+
+        effective_email = payload.customer_email or email_from_session
+
+        is_paid = payment_status == "paid" or session_status == "complete"
+
+        logger.bind(
+            session_id=session_id,
+            payment_status=payment_status,
+            session_status=session_status,
+            stripe_customer=stripe_customer,
+            subscription=(subscription.get("id") if isinstance(subscription, dict) else subscription),
+            effective_email=effective_email,
+            is_paid=is_paid,
+        ).info("Stripe session verification completed")
+
+        if isinstance(stripe_customer, dict):
+            stripe_customer_id = stripe_customer.get("id")
+        elif isinstance(stripe_customer, str):
+            stripe_customer_id = stripe_customer
+        else:
+            stripe_customer_id = getattr(stripe_customer, "id", None)
+
+        response: Dict[str, Any] = {
+            "success": bool(is_paid),
+            "session_id": session_id,
+            "payment_status": payment_status,
+            "status": session_status,
+            "customer_email": effective_email,
+            "stripe_customer_id": stripe_customer_id,
+        }
+
+        if subscription:
+            if isinstance(subscription, dict):
+                response["stripe_subscription_id"] = subscription.get("id")
+                response["stripe_subscription_status"] = subscription.get("status")
+            else:
+                response["stripe_subscription_id"] = subscription
+
+        return response
+
+    except Exception as exc:  # pragma: no cover
+        logger.error(f"Failed to verify Stripe session {session_id}: {exc}")
+        raise HTTPException(status_code=502, detail="Stripe verification failed")
 
 
 @router.post("/webhook")

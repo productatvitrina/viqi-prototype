@@ -4,13 +4,15 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, Copy, Mail, CheckCircle, Star, Building } from "lucide-react";
 import { toast } from "sonner";
+import { api, getCurrentUser } from "@/lib/api";
 
 interface PersonRevealed {
   id: number;
@@ -28,52 +30,181 @@ export default function RevealPagePOC() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copiedEmails, setCopiedEmails] = useState<Set<number>>(new Set());
+  const [customUser, setCustomUser] = useState<any>(null);
+  const [handledSessionId, setHandledSessionId] = useState<string | null>(null);
 
+  const { data: session, status } = useSession();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const sessionId = searchParams?.get("session_id") ?? null;
+
+  const mapToRevealedMatches = (results: any[]): PersonRevealed[] =>
+    results.map((result: any, index: number) => ({
+      id: result.id ?? index + 1,
+      name: result.name,
+      title: result.title,
+      company_name: result.company_name,
+      email: result.email_plain || result.email || "",
+      reason: result.reason,
+      email_draft: result.email_draft,
+      score: result.score,
+    }));
 
   useEffect(() => {
-    const loadRevealedMatches = async () => {
-      // POC: Load from stored results instead of API calls
-      const storedResults = sessionStorage.getItem("matchResults");
-      
-      if (!storedResults) {
-        toast.error("No match results found. Please start a new search.");
-        router.push("/");
+    const user = getCurrentUser();
+    if (user) {
+      setCustomUser(user);
+    }
+  }, [status]);
+
+  useEffect(() => {
+    if (status === "loading") {
+      return;
+    }
+
+    const processReveal = async () => {
+      setIsLoading(true);
+      let determinedEmail = session?.user?.email || customUser?.email || sessionStorage.getItem("stripeCheckoutEmail") || undefined;
+      let forceRefresh = false;
+
+      if (sessionId && sessionId !== handledSessionId) {
+        try {
+          const verification = await api.payments.verifyPayment(sessionId, {
+            customer_email: determinedEmail,
+          }).then((r) => r.data);
+
+          setHandledSessionId(sessionId);
+
+          if (verification.customer_email) {
+            determinedEmail = verification.customer_email;
+            sessionStorage.setItem("stripeCheckoutEmail", verification.customer_email);
+          }
+
+          if (verification.success) {
+            toast.success("Payment confirmed", {
+              description: "Unlocking your connections now.",
+            });
+            forceRefresh = true;
+            sessionStorage.setItem("lastStripeSessionId", sessionId);
+          } else {
+            toast.warning("Checkout not completed", {
+              description: "You can retry the payment from the paywall.",
+            });
+          }
+        } catch (err) {
+          console.error("Failed to verify Stripe session", err);
+          toast.error("Unable to verify payment", {
+            description: "We couldn't confirm your payment. Please try again or contact support.",
+          });
+        } finally {
+          router.replace("/reveal");
+        }
+      }
+
+      await ensureMatches(determinedEmail, forceRefresh);
+    };
+
+    processReveal();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, session?.user?.email, customUser?.email, sessionId]);
+
+  const ensureMatches = async (userEmail?: string | null, forceRefresh = false) => {
+    const storedResultsRaw = sessionStorage.getItem("matchResults");
+
+    if (!storedResultsRaw) {
+      await refreshMatches(userEmail);
+      return;
+    }
+
+    try {
+      const storedResults = JSON.parse(storedResultsRaw);
+      const hasUnmaskedEmails = Array.isArray(storedResults.results)
+        ? storedResults.results.every((result: any) => !!result.email_plain)
+        : false;
+
+      if (forceRefresh || storedResults.status !== "revealed" || !hasUnmaskedEmails) {
+        await refreshMatches(userEmail);
         return;
       }
 
-      try {
-        const matchResponse = JSON.parse(storedResults);
-        
-        // Convert to reveal format
-        const revealedMatches: PersonRevealed[] = matchResponse.results.map((result: any, index: number) => ({
-          id: index + 1,
-          name: result.name,
-          title: result.title,
-          company_name: result.company_name,
-          email: result.email_plain,
-          reason: result.reason,
-          email_draft: result.email_draft,
-          score: result.score
-        }));
+      setMatches(mapToRevealedMatches(storedResults.results));
+      setError(null);
+    } catch (err) {
+      console.error("Failed to parse stored reveal results", err);
+      await refreshMatches(userEmail);
+      return;
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-        setMatches(revealedMatches);
-        
+  const refreshMatches = async (userEmail?: string | null) => {
+    const resolvedEmail = userEmail || session?.user?.email || customUser?.email || sessionStorage.getItem("stripeCheckoutEmail") || undefined;
+    const userQuery = sessionStorage.getItem("userQuery");
+
+    if (!resolvedEmail) {
+      setError("Missing email for reveal. Please sign in again.");
+      toast.error("Sign-in required", {
+        description: "We couldn't detect your email. Please sign in again to unlock results.",
+      });
+      setIsLoading(false);
+      router.push("/auth/signin");
+      return;
+    }
+
+    if (!userQuery) {
+      setError("No search query found. Please start a new search.");
+      toast.error("Start a new search", {
+        description: "We couldn't find your original query. Redirecting you to begin again.",
+      });
+      setIsLoading(false);
+      router.push("/");
+      return;
+    }
+
+    try {
+      console.log("🔄 Refreshing matches after payment", { resolvedEmail, userQuerySnippet: userQuery.slice(0, 40) });
+      const refreshed = await api.matchingPoc.createMatch({
+        query: userQuery,
+        user_email: resolvedEmail,
+        max_results: 4,
+      }).then((r) => r.data);
+
+      const pocResults = {
+        match_id: Date.now(),
+        results: refreshed.results,
+        credit_cost: 1,
+        token_usage: { prompt: 0, completion: 0, total: 0 },
+        status: refreshed.revealed ? "revealed" : "preview",
+        user_company: refreshed.user_company,
+      };
+
+      sessionStorage.setItem("currentMatchId", pocResults.match_id.toString());
+      sessionStorage.setItem("matchResults", JSON.stringify(pocResults));
+
+      const revealedMatches = mapToRevealedMatches(pocResults.results);
+      setMatches(revealedMatches);
+      setError(null);
+
+      if (refreshed.revealed) {
         toast.success("Contacts revealed!", {
-          description: `Found ${revealedMatches.length} professional contacts for you.`
+          description: `Found ${revealedMatches.length} professional contacts for you.`,
         });
-        
-      } catch (err) {
-        console.error("Failed to parse stored results:", err);
-        setError("Failed to load results");
-        toast.error("Failed to load results");
-      } finally {
-        setIsLoading(false);
+      } else {
+        toast.info("Preview updated", {
+          description: "You still need to complete payment to unlock full details.",
+        });
       }
-    };
-
-    loadRevealedMatches();
-  }, [router]);
+    } catch (err: any) {
+      console.error("Failed to refresh matches after payment", err);
+      setError(err.message || "Failed to load results");
+      toast.error("Failed to load results", {
+        description: "Please try again or contact support if the issue persists.",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const copyEmailDraft = async (personId: number, emailDraft: string) => {
     try {

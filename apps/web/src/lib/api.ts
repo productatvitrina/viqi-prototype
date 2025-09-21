@@ -126,14 +126,22 @@ export const api = {
     getPlans: () =>
       apiClient.get("/api/payments/plans"),
     
-    createCheckout: (data: { plan_name: string; billing_cycle: string; geo_group?: string; price_id?: string }) =>
+    createCheckout: (data: {
+      plan_name: string;
+      billing_cycle: string;
+      geo_group?: string;
+      price_id?: string;
+      success_url?: string;
+      cancel_url?: string;
+      customer_email?: string;
+    }) =>
       apiClient.post("/api/payments/checkout", data),
     
     purchaseCredits: (data: { credits: number; match_id?: number }) =>
       apiClient.post("/api/payments/purchase-credits", data),
     
-    verifyPayment: (sessionId: string) =>
-      apiClient.post(`/api/payments/verify/${sessionId}`),
+    verifyPayment: (sessionId: string, data?: { customer_email?: string }) =>
+      apiClient.post(`/api/payments/verify/${sessionId}`, data),
     
     getHistory: () =>
       apiClient.get("/api/payments/history"),
@@ -150,8 +158,17 @@ export const api = {
     adjustCredits: (credits: number) =>
       apiClient.post("/api/users/me/credits/adjust", { credits }),
 
-    getSubscription: () =>
-      apiClient.get("/api/users/me/subscription"),
+    getSubscription: (email?: string) => {
+      const config: AxiosRequestConfig = {};
+      if (email) {
+        config.params = { email };
+        config.headers = {
+          ...(config.headers ?? {}),
+          "x-user-email": email,
+        } as AxiosRequestConfig["headers"];
+      }
+      return apiClient.get("/api/users/me/subscription", config);
+    },
   },
 };
 

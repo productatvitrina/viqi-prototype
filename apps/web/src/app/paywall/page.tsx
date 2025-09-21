@@ -160,18 +160,32 @@ export default function PaywallPage() {
     // Check both session and custom auth
     const currentUser = getCurrentUser();
     const isAuthenticated = session?.user || currentUser;
+    const userEmail = session?.user?.email || currentUser?.email || undefined;
+
+    const origin = typeof window !== "undefined" ? window.location.origin : process.env.NEXT_PUBLIC_APP_URL || "https://viqi-prototype-web.vercel.app";
+    const normalizedOrigin = origin.replace(/\/$/, "");
+    const successUrl = `${normalizedOrigin}/reveal`;
+    const cancelUrl = `${normalizedOrigin}/paywall`;
 
     console.log("🛒 Subscribe attempt:", {
       planName,
       hasSession: !!session?.user,
       hasCustomAuth: !!currentUser,
       isAuthenticated: !!isAuthenticated,
-      userEmail: session?.user?.email || currentUser?.email
+      userEmail
     });
     
     if (!isAuthenticated) {
       toast.error("Please sign in to continue", {
         description: "Authentication is required to purchase a subscription."
+      });
+      router.push("/auth/signin");
+      return;
+    }
+
+    if (!userEmail) {
+      toast.error("Email required", {
+        description: "We couldn't detect your email. Please sign in again."
       });
       router.push("/auth/signin");
       return;
@@ -201,9 +215,16 @@ export default function PaywallPage() {
         api.payments.createCheckout({
           plan_name: planName,
           billing_cycle: billingCycle,
-          price_id: priceId
+          price_id: priceId,
+          customer_email: userEmail,
+          success_url: successUrl,
+          cancel_url: cancelUrl
         })
       );
+
+      sessionStorage.setItem("stripeCheckoutEmail", userEmail);
+      sessionStorage.setItem("stripeCheckoutPlan", `${planName}_${billingCycle}`);
+      sessionStorage.setItem("stripeCheckoutOrigin", normalizedOrigin);
 
       // Redirect to Stripe checkout
       if (response.checkout_url) {
@@ -225,7 +246,8 @@ export default function PaywallPage() {
     // Check both session and custom auth
     const currentUser = getCurrentUser();
     const isAuthenticated = session?.user || currentUser;
-    
+    const userEmail = session?.user?.email || currentUser?.email || undefined;
+
     if (!isAuthenticated) {
       toast.error("Please sign in to continue");
       router.push("/auth/signin");
@@ -235,7 +257,7 @@ export default function PaywallPage() {
     console.log("💳 Starting payment with auth:", {
       hasSession: !!session?.user,
       hasCustomAuth: !!currentUser,
-      userEmail: session?.user?.email || currentUser?.email
+      userEmail
     });
 
     setIsLoading(true);
@@ -247,6 +269,10 @@ export default function PaywallPage() {
           match_id: currentMatchId ? parseInt(currentMatchId) : undefined
         })
       );
+
+      if (userEmail) {
+        sessionStorage.setItem("stripeCheckoutEmail", userEmail);
+      }
 
       if (response.checkout_url) {
         window.location.href = response.checkout_url;
