@@ -4,13 +4,12 @@
 "use client";
 
 import { Suspense, useState, useEffect } from "react";
+import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, Copy, Mail, CheckCircle, Star, Building } from "lucide-react";
+import { ArrowLeft, Copy, Mail, CheckCircle, Building } from "lucide-react";
 import { toast } from "sonner";
 import { api, getCurrentUser } from "@/lib/api";
 import CreditsBadge from "@/components/credits-badge";
@@ -29,10 +28,27 @@ interface PersonRevealed {
 
 function RevealLoading() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">
-      <div className="text-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-        <p className="text-gray-600">Loading your contacts...</p>
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#020710] px-6 text-white">
+      <Image
+        src="/bg-top.png"
+        alt="Background glow"
+        fill
+        priority
+        className="pointer-events-none select-none object-cover opacity-60"
+      />
+      <Image
+        src="/bg-gradient-shape.png"
+        alt="Background gradient"
+        width={720}
+        height={720}
+        priority
+        className="pointer-events-none select-none absolute right-[-6rem] top-[-6rem] h-[720px] w-[720px] opacity-70"
+      />
+      <div className="absolute inset-0 bg-gradient-to-br from-[#050A17]/50 via-transparent to-[#020710]" />
+
+      <div className="relative z-10 flex flex-col items-center gap-4 text-sm text-white/70">
+        <div className="size-12 animate-spin rounded-full border-2 border-white/40 border-t-transparent" />
+        <p>Loading your contacts…</p>
       </div>
     </div>
   );
@@ -45,6 +61,7 @@ function RevealContent() {
   const [copiedEmails, setCopiedEmails] = useState<Set<number>>(new Set());
   const [customUser, setCustomUser] = useState<any>(null);
   const [handledSessionId, setHandledSessionId] = useState<string | null>(null);
+  const [userQuery, setUserQuery] = useState<string | null>(null);
 
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -52,13 +69,17 @@ function RevealContent() {
   const sessionId = searchParams?.get("session_id") ?? null;
   const { creditSummary } = useCredits(false);
 
+  useEffect(() => {
+    setUserQuery(sessionStorage.getItem("userQuery"));
+  }, []);
+
   const mapToRevealedMatches = (results: any[]): PersonRevealed[] =>
     results.map((result: any, index: number) => ({
       id: result.id ?? index + 1,
       name: result.name,
       title: result.title,
       company_name: result.company_name,
-      email: result.email_plain || result.email || "",
+      email: result.email_plain || result.raw_email || result.email || "",
       reason: result.reason,
       email_draft: result.email_draft,
       score: result.score,
@@ -122,6 +143,41 @@ function RevealContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, session?.user?.email, customUser?.email, sessionId]);
 
+  const promoteStoredResultsToReveal = (storedResults: any, { showToast = false } = {}) => {
+    if (!storedResults || !Array.isArray(storedResults.results)) {
+      return false;
+    }
+
+    const promotedResults = storedResults.results.map((result: any) => ({
+      ...result,
+      email_plain: result.email_plain || result.raw_email || result.email,
+    }));
+
+    const payload = {
+      ...storedResults,
+      status: "revealed",
+      results: promotedResults,
+    };
+
+    if (payload.credit_summary) {
+      sessionStorage.setItem("creditSummary", JSON.stringify(payload.credit_summary));
+      window.dispatchEvent(new Event("viqi:credits-updated"));
+    }
+
+    sessionStorage.setItem("matchResults", JSON.stringify(payload));
+    setMatches(mapToRevealedMatches(promotedResults));
+    setError(null);
+    setIsLoading(false);
+
+    if (showToast) {
+      toast.success("Contacts revealed!", {
+        description: `Found ${promotedResults.length} professional contacts for you.`,
+      });
+    }
+
+    return true;
+  };
+
   const ensureMatches = async (userEmail?: string | null, forceRefresh = false) => {
     const storedResultsRaw = sessionStorage.getItem("matchResults");
 
@@ -132,27 +188,41 @@ function RevealContent() {
 
     try {
       const storedResults = JSON.parse(storedResultsRaw);
-      const hasUnmaskedEmails = Array.isArray(storedResults.results)
-        ? storedResults.results.every((result: any) => !!result.email_plain)
+      const canRevealLocally = Array.isArray(storedResults.results) && storedResults.results.length > 0;
+      const hasRawEmails = canRevealLocally
+        ? storedResults.results.some((result: any) => result.raw_email)
         : false;
 
-      if (forceRefresh || storedResults.status !== "revealed" || !hasUnmaskedEmails) {
-        await refreshMatches(userEmail);
+      if (forceRefresh) {
+        await refreshMatches(userEmail, {
+          fallback: hasRawEmails ? storedResults : null,
+          showToast: true,
+        });
         return;
       }
 
-      setMatches(mapToRevealedMatches(storedResults.results));
-      setError(null);
+      if (storedResults.status === "revealed" && canRevealLocally) {
+        setMatches(mapToRevealedMatches(storedResults.results));
+        setError(null);
+        setIsLoading(false);
+        return;
+      }
+
+      if (hasRawEmails && promoteStoredResultsToReveal(storedResults)) {
+        return;
+      }
+
+      await refreshMatches(userEmail);
     } catch (err) {
       console.error("Failed to parse stored reveal results", err);
       await refreshMatches(userEmail);
-      return;
-    } finally {
-      setIsLoading(false);
     }
   };
 
-  const refreshMatches = async (userEmail?: string | null) => {
+  const refreshMatches = async (
+    userEmail?: string | null,
+    options?: { fallback?: any; showToast?: boolean }
+  ) => {
     const resolvedEmail = userEmail || session?.user?.email || customUser?.email || sessionStorage.getItem("stripeCheckoutEmail") || undefined;
     const userQuery = sessionStorage.getItem("userQuery");
 
@@ -230,6 +300,10 @@ function RevealContent() {
       toast.error("Failed to load results", {
         description: "Please try again or contact support if the issue persists.",
       });
+
+      if (options?.fallback) {
+        promoteStoredResultsToReveal(options.fallback, { showToast: options?.showToast });
+      }
     } finally {
       setIsLoading(false);
     }
@@ -267,170 +341,205 @@ function RevealContent() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">
-        <Card className="w-full max-w-md mx-4">
-          <CardContent className="p-6 text-center">
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">Error</h2>
-            <p className="text-gray-600 mb-4">{error}</p>
-            <Button onClick={() => router.push("/")} variant="outline">
-              Start Over
-            </Button>
-          </CardContent>
-        </Card>
+      <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#020710] px-6 text-white">
+        <Image
+          src="/bg-top.png"
+          alt="Background glow"
+          fill
+          priority
+          className="pointer-events-none select-none object-cover opacity-60"
+        />
+        <Image
+          src="/bg-gradient-shape.png"
+          alt="Background gradient"
+          width={720}
+          height={720}
+          priority
+          className="pointer-events-none select-none absolute left-[-6rem] top-[-6rem] h-[720px] w-[720px] opacity-70"
+        />
+        <div className="absolute inset-0 bg-gradient-to-br from-[#050A17]/50 via-transparent to-[#020710]" />
+
+        <div className="relative z-10 w-full max-w-md rounded-3xl border border-white/10 bg-red-500/10 p-8 text-center shadow-[0_0_30px_rgba(229,57,53,0.2)] backdrop-blur-2xl">
+          <h2 className="text-xl font-semibold text-white">Something went wrong</h2>
+          <p className="mt-3 text-sm text-white/70">{error}</p>
+          <Button
+            onClick={() => router.push("/")}
+            variant="ghost"
+            className="mt-6 rounded-full border border-white/10 bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/20"
+          >
+            Start over
+          </Button>
+        </div>
       </div>
     );
   }
 
+  const greetingName = session?.user?.name?.split(" ")[0] || customUser?.name;
+
+  const handleNewSearch = () => {
+    sessionStorage.removeItem("userQuery");
+    sessionStorage.removeItem("matchResults");
+    sessionStorage.removeItem("currentMatchId");
+    sessionStorage.removeItem("creditSummary");
+    router.push("/");
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-      {/* Header */}
-      <header className="border-b bg-white/80 backdrop-blur-sm">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-lg">V</span>
-              </div>
-              <span className="text-xl font-bold text-gray-900">ViQi AI</span>
+    <div className="relative min-h-screen overflow-hidden bg-[#020710] text-white">
+      <Image
+        src="/bg-top.png"
+        alt="Background glow"
+        fill
+        priority
+        className="pointer-events-none select-none object-cover opacity-60"
+      />
+      <Image
+        src="/bg-gradient-shape.png"
+        alt="Background gradient"
+        width={720}
+        height={720}
+        priority
+        className="pointer-events-none select-none absolute right-[-6rem] top-[-6rem] h-[720px] w-[720px] opacity-70"
+      />
+      <div className="absolute inset-0 bg-gradient-to-br from-[#050A17]/50 via-transparent to-[#020710]" />
+
+      <header className="relative z-10 border-b border-white/5 bg-black/20 backdrop-blur-xl">
+        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-4 px-6 py-6">
+          <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleNewSearch}
+              className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-white hover:bg-white/10"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Home</span>
+            </Button>
+            <div className="relative h-9 w-28">
+              <Image src="/logo-ViQi-light.png" alt="ViQi" fill priority className="object-contain" />
             </div>
-            <div className="flex items-center gap-2">
-              <CreditsBadge />
-              <Badge variant="secondary" className="bg-green-100 text-green-800">
-                <CheckCircle className="w-3 h-3 mr-1" />
-                Revealed
-              </Badge>
-            </div>
+          </div>
+          <div className="flex items-center gap-3 text-sm text-white/70">
+            {greetingName ? <span className="text-white/80">Hi, {greetingName}</span> : null}
+            <CreditsBadge />
+            <Badge className="bg-emerald-500/10 text-xs font-semibold uppercase tracking-[0.3em] text-emerald-200">
+              Revealed
+            </Badge>
           </div>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="container mx-auto px-4 py-8">
-        <div className="max-w-4xl mx-auto">
-          {/* Header */}
-          <div className="mb-6">
+      <main className="relative z-10 mx-auto w-full max-w-6xl px-6 py-16">
+        {userQuery ? (
+          <div className="flex flex-col gap-4 rounded-3xl border border-white/10 bg-white/5 p-6 text-sm text-white/70 backdrop-blur-lg md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-white/50">Your question</p>
+              <p className="mt-2 text-base text-white">{userQuery}</p>
+            </div>
             <Button
               variant="ghost"
-              onClick={() => router.push("/")}
-              className="mb-4"
+              onClick={handleNewSearch}
+              className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-white hover:bg-white/15"
             >
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back
+              Search again
             </Button>
-            
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
-              Your Professional Contacts
-            </h1>
-            <p className="text-gray-600">
-              Full contact details and personalized outreach emails for {matches.length} relevant professionals.
-            </p>
           </div>
+        ) : null}
 
-          {creditSummary && (
-            <Card className="mb-6 border-green-200 bg-green-50/40">
-              <CardContent className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-green-900">
-                    Current balance: {creditSummary.projected_remaining_credits ?? creditSummary.remaining_credits ?? 0} / {creditSummary.included_credits ?? 0} credits
-                  </p>
-                  <p className="text-xs text-green-800">
-                    Total used this period: {creditSummary.used_credits ?? 0} credits
-                  </p>
+        {creditSummary ? (
+          <div className="mt-8 rounded-3xl border border-white/10 bg-white/5 p-6 text-sm text-white/70 backdrop-blur-lg">
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-white/50">Credits overview</p>
+            <div className="mt-3 grid gap-4 md:grid-cols-3">
+              <div>
+                <div className="text-2xl font-semibold text-white">
+                  {creditSummary.projected_remaining_credits ?? creditSummary.remaining_credits ?? 0}
                 </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Contacts Grid */}
-          <div className="grid gap-6 md:grid-cols-2">
-            {matches.map((match) => (
-              <Card key={match.id} className="shadow-lg hover:shadow-xl transition-shadow">
-                <CardHeader className="pb-4">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <CardTitle className="text-xl text-gray-900">{match.name}</CardTitle>
-                      <p className="text-blue-600 font-medium mt-1">{match.title}</p>
-                      <div className="flex items-center text-gray-600 mt-2">
-                        <Building className="w-4 h-4 mr-1" />
-                        {match.company_name}
-                      </div>
-                    </div>
-                    <Badge variant="outline" className="text-green-600 border-green-200">
-                      <Star className="w-3 h-3 mr-1" />
-                      {Math.round(match.score * 100)}% match
-                    </Badge>
-                  </div>
-                </CardHeader>
-
-                <CardContent className="space-y-4">
-                  {/* Contact Info */}
-                  <div>
-                    <h4 className="font-medium text-gray-900 mb-2">Contact</h4>
-                    <p className="text-blue-600 font-mono text-sm">{match.email}</p>
-                  </div>
-
-                  {/* Why This Match */}
-                  <div>
-                    <h4 className="font-medium text-gray-900 mb-2">Why this match</h4>
-                    <p className="text-gray-600 text-sm leading-relaxed">{match.reason}</p>
-                  </div>
-
-                  <Separator />
-
-                  {/* Email Draft */}
-                  <div>
-                    <h4 className="font-medium text-gray-900 mb-2">Personalized Email</h4>
-                    <div className="bg-gray-50 p-3 rounded-lg border">
-                      <p className="text-sm text-gray-700 whitespace-pre-line leading-relaxed">
-                        {match.email_draft}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex gap-2 pt-2">
-                    <Button
-                      onClick={() => copyEmailDraft(match.id, match.email_draft)}
-                      variant="outline"
-                      size="sm"
-                      className="flex-1"
-                    >
-                      {copiedEmails.has(match.id) ? (
-                        <>
-                          <CheckCircle className="w-4 h-4 mr-2 text-green-600" />
-                          Copied!
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-4 h-4 mr-2" />
-                          Copy Email
-                        </>
-                      )}
-                    </Button>
-                    <Button
-                      onClick={() => sendEmail(match.email, match.name, match.email_draft)}
-                      size="sm"
-                      className="flex-1 bg-blue-600 hover:bg-blue-700"
-                    >
-                      <Mail className="w-4 h-4 mr-2" />
-                      Send Email
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                <p className="text-xs text-white/50">Credits remaining</p>
+              </div>
+              <div>
+                <div className="text-2xl font-semibold text-white">
+                  {creditSummary.used_credits ?? 0}
+                </div>
+                <p className="text-xs text-white/50">Credits used</p>
+              </div>
+              <div>
+                <div className="text-2xl font-semibold text-white">
+                  {creditSummary.included_credits ?? 0}
+                </div>
+                <p className="text-xs text-white/50">Plan total</p>
+              </div>
+            </div>
           </div>
+        ) : null}
 
-          {/* Footer */}
-          <div className="mt-8 text-center">
-            <Button
-              onClick={() => router.push("/")}
-              variant="outline"
-              size="lg"
+        <div className="mt-12 grid gap-6 md:grid-cols-2">
+          {matches.map((match) => (
+            <div
+              key={match.id}
+              className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur-lg transition duration-200 hover:-translate-y-1 hover:shadow-[0_25px_50px_-12px_rgba(15,23,42,0.6)]"
             >
-              Search Again
-            </Button>
-          </div>
+              <div className="flex flex-col gap-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h3 className="text-lg font-semibold text-white">{match.name}</h3>
+                    <p className="text-sm text-white/60">{match.title}</p>
+                    <div className="mt-2 flex items-center gap-2 text-xs text-white/50">
+                      <Building className="w-4 h-4" />
+                      <span>{match.company_name}</span>
+                    </div>
+                  </div>
+                  <Badge className="bg-white/10 text-xs font-semibold uppercase tracking-[0.3em] text-emerald-200">
+                    {Math.round(match.score * 100)}% match
+                  </Badge>
+                </div>
+
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/70">
+                  <p>{match.reason}</p>
+                </div>
+
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-white/50">Contact</p>
+                  <p className="mt-2 font-mono text-sm text-[#76B8FF]">{match.email}</p>
+                </div>
+
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                  <div className="mb-3 flex items-center justify-between text-xs text-white/50">
+                    <span className="uppercase tracking-[0.3em]">Email draft</span>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => copyEmailDraft(match.id, match.email_draft)}
+                        className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold text-white/70 hover:bg-white/15"
+                      >
+                        {copiedEmails.has(match.id) ? (
+                          <>
+                            <CheckCircle className="w-3 h-3 text-emerald-300" />
+                            Copied
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3 h-3" />
+                            Copy
+                          </>
+                        )}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => sendEmail(match.email, match.name, match.email_draft)}
+                        className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold text-white/70 hover:bg-white/15"
+                      >
+                        <Mail className="w-3 h-3" />
+                        Send
+                      </Button>
+                    </div>
+                  </div>
+                  <p className="whitespace-pre-line text-sm text-white/70">{match.email_draft}</p>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </main>
     </div>

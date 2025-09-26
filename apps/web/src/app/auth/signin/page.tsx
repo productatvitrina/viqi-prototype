@@ -1,37 +1,34 @@
 /**
- * Sign-in page with Google OAuth
+ * Sign-in page with refreshed Vitrina styling
  */
 "use client";
 
 import { useEffect, useState, Suspense } from "react";
+import Image from "next/image";
 import { signIn, getSession } from "next-auth/react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Chrome, Linkedin, Mail } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { flowConfig, getNextStep, getStepRoute } from "@/config/flow.config";
+import { getNextStep, getStepRoute } from "@/config/flow.config";
 
 function SignInPageInner() {
   const [isLoading, setIsLoading] = useState(false);
   const [provider, setProvider] = useState<string | null>(null);
-  const [showEmailAuth, setShowEmailAuth] = useState(false);
   const [email, setEmail] = useState("");
   const router = useRouter();
-  const searchParams = useSearchParams();
 
   useEffect(() => {
-    // Check if user is already signed in
     getSession().then((session) => {
-      if (session) {
-        // User is already signed in, redirect to next step
-        const nextStep = getNextStep("sso_optional");
-        if (nextStep) {
-          router.push(getStepRoute(nextStep));
-        }
+      if (!session) {
+        return;
+      }
+      const nextStep = getNextStep("sso_optional");
+      if (nextStep) {
+        router.push(getStepRoute(nextStep));
       }
     });
   }, [router]);
@@ -50,51 +47,51 @@ function SignInPageInner() {
       });
     } catch (error) {
       console.error("Sign-in error:", error);
+      toast.error("Google sign-in failed. Please try again.");
       setIsLoading(false);
       setProvider(null);
     }
   };
 
   const handleEmailAuth = async () => {
-    if (!email || !email.includes('@')) {
+    if (!email || !email.includes("@")) {
       toast.error("Please enter a valid email address");
       return;
     }
-    
+
     setIsLoading(true);
     setProvider("email");
-    
+
     try {
-      // Extract domain for business context
-      const domain = email.split('@')[1].toLowerCase();
-      const freeProviders = ['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'icloud.com'];
+      const domain = email.split("@")[1].toLowerCase();
+      const freeProviders = [
+        "gmail.com",
+        "yahoo.com",
+        "hotmail.com",
+        "outlook.com",
+        "icloud.com",
+      ];
       const isBusinessEmail = !freeProviders.includes(domain);
-      
-      // Session-only authentication - store in localStorage for session persistence
+
       const userSession = {
         email,
-        name: email.split('@')[0],
-        businessDomain: isBusinessEmail ? domain : '',
+        name: email.split("@")[0],
+        businessDomain: isBusinessEmail ? domain : "",
         company: isBusinessEmail ? domain : null,
-        authType: 'email',
-        provider: 'email'
+        authType: "email",
+        provider: "email",
       };
-      
-      // Store the session info for this POC (session-only, no backend)
-      localStorage.setItem('customAuth', JSON.stringify(userSession));
-      
-      // Also store in sessionStorage for backward compatibility
-      sessionStorage.setItem('userEmail', email);
-      sessionStorage.setItem('businessDomain', isBusinessEmail ? domain : '');
-      
-      toast.success(`Signed in with ${isBusinessEmail ? 'business' : 'personal'} email!`);
-      
-      // Redirect to next step
+
+      localStorage.setItem("customAuth", JSON.stringify(userSession));
+      sessionStorage.setItem("userEmail", email);
+      sessionStorage.setItem("businessDomain", isBusinessEmail ? domain : "");
+
+      toast.success(`Signed in with ${isBusinessEmail ? "business" : "personal"} email!`);
+
       const nextStep = getNextStep("sso_optional");
       if (nextStep) {
         router.push(getStepRoute(nextStep));
       }
-      
     } catch (error) {
       console.error("Email auth failed:", error);
       toast.error("Email authentication failed. Please try again.");
@@ -104,191 +101,139 @@ function SignInPageInner() {
     }
   };
 
-  const handleSkip = () => {
-    // For demo purposes, allow skipping auth
-    const nextStep = getNextStep("sso_optional");
-    if (nextStep) {
-      router.push(getStepRoute(nextStep));
-    }
-  };
+  const inputDisabled = isLoading && provider === "email";
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-      {/* Header */}
-      <header className="border-b bg-white/80 backdrop-blur-sm">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => router.back()}
-                className="flex items-center space-x-2"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                <span>Back</span>
-              </Button>
-              <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                  <span className="text-white font-bold text-lg">V</span>
-                </div>
-                <span className="text-xl font-bold text-gray-900">ViQi AI</span>
-              </div>
-            </div>
-            <Badge variant="secondary">Step 2 of 5</Badge>
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#020710] px-4 text-white">
+      <Image
+        src="/bg-top.png"
+        alt="Background glow"
+        fill
+        priority
+        className="pointer-events-none select-none object-cover opacity-60"
+      />
+      <Image
+        src="/bg-gradient-shape.png"
+        alt="Background gradient"
+        width={680}
+        height={680}
+        priority
+        className="pointer-events-none select-none absolute -left-40 top-[-10%] h-[680px] w-[680px] opacity-60"
+      />
+      <div className="absolute inset-0 bg-gradient-to-br from-[#050A17]/50 via-transparent to-[#020710]" />
+
+      <button
+        type="button"
+        onClick={() => router.back()}
+        className="absolute left-6 top-6 z-20 inline-flex size-10 items-center justify-center rounded-full border border-white/15 bg-black/40 text-white/70 transition hover:bg-white/10"
+      >
+        <X className="size-5" />
+      </button>
+
+      <div className="relative z-10 w-full max-w-sm rounded-[32px] border border-white/10 bg-black/70 p-8 shadow-[0_0_18px_rgba(0,0,0,0.35)] backdrop-blur-2xl">
+        <div className="mb-6 flex flex-col items-center text-center">
+          <div className="relative mb-5 h-10 w-28">
+            <Image
+              src="/logo-vitrina-light.png"
+              alt="Vitrina"
+              fill
+              priority
+              className="object-contain"
+            />
           </div>
+          <p className="text-sm font-medium text-white/70">Log in or sign up to continue</p>
         </div>
-      </header>
 
-      {/* Main Content */}
-      <main className="container mx-auto px-4 py-12">
-        <div className="max-w-md mx-auto">
-          <Card className="shadow-lg">
-            <CardHeader className="text-center pb-4">
-              <div className="mx-auto w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
-                <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                  <span className="text-white font-bold">V</span>
-                </div>
-              </div>
-              <CardTitle className="text-2xl">Sign in to continue</CardTitle>
-              <p className="text-gray-600 mt-2">
-                Connect your profile to get personalized matches and save your preferences
-              </p>
-            </CardHeader>
-            
-            <CardContent className="space-y-4">
-              {/* Google Sign In */}
-              <Button
-                onClick={handleGoogleSignIn}
-                disabled={isLoading}
-                className="w-full bg-white hover:bg-gray-50 text-gray-900 border border-gray-300 shadow-sm"
-                size="lg"
-              >
-                {isLoading && provider === "google" ? (
-                  <div className="flex items-center space-x-2">
-                    <div className="w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
-                    <span>Signing in...</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center space-x-3">
-                    <Chrome className="w-5 h-5" />
-                    <span>Continue with Google</span>
-                  </div>
-                )}
-              </Button>
-
-              {/* LinkedIn Sign In (Disabled for demo) */}
-              <Button
-                disabled
-                className="w-full bg-[#0A66C2] hover:bg-[#0A66C2]/90 text-white opacity-50"
-                size="lg"
-              >
-                <div className="flex items-center space-x-3">
-                  <Linkedin className="w-5 h-5" />
-                  <span>Continue with LinkedIn</span>
-                  <Badge variant="secondary" className="ml-2 text-xs">
-                    Coming Soon
-                  </Badge>
-                </div>
-              </Button>
-
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <Separator />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-white px-2 text-gray-500">Or</span>
-                </div>
-              </div>
-
-              {/* Email Sign In Option */}
-              {!showEmailAuth ? (
-                <Button
-                  onClick={() => setShowEmailAuth(true)}
-                  variant="outline"
-                  className="w-full"
-                  size="lg"
-                >
-                  <div className="flex items-center space-x-3">
-                    <Mail className="w-5 h-5" />
-                    <span>Sign in with Email</span>
-                  </div>
-                </Button>
+        <div className="space-y-5">
+          <div>
+            <Input
+              type="email"
+              placeholder="Enter your email"
+              value={email}
+              disabled={inputDisabled}
+              onChange={(event) => setEmail(event.target.value)}
+              className="h-12 rounded-2xl border border-white/15 bg-white text-sm text-black placeholder-black/50 shadow-[0_0_12px_rgba(0,0,0,0.2)] focus-visible:border-[#2E8AE5] focus-visible:outline-none focus-visible:ring-0"
+            />
+            <Button
+              type="button"
+              onClick={handleEmailAuth}
+              disabled={isLoading || !email}
+              className="mt-3 w-full rounded-xl bg-black py-3 text-sm font-semibold text-white shadow-[0_0_25px_5px_rgba(6,110,214,0.05)] transition hover:bg-black/90 disabled:border disabled:border-white/10 disabled:bg-black/60 disabled:text-white/40"
+            >
+              {isLoading && provider === "email" ? (
+                <span className="flex items-center justify-center gap-2">
+                  <Loader2 className="size-4 animate-spin" />
+                  <span>Continuing…</span>
+                </span>
               ) : (
-                <div className="space-y-3">
-                  <div>
-                    <label className="text-sm font-medium text-gray-700 mb-2 block">
-                      Enter your business email
-                    </label>
-                    <Input
-                      type="email"
-                      placeholder="john@company.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="w-full"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">
-                      We'll extract your company info to provide better matches
-                    </p>
-                  </div>
-                  <div className="flex space-x-2">
-                    <Button
-                      onClick={handleEmailAuth}
-                      disabled={isLoading || !email}
-                      className="flex-1"
-                    >
-                      {isLoading && provider === "email" ? (
-                        <div className="flex items-center space-x-2">
-                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                          <span>Signing in...</span>
-                        </div>
-                      ) : (
-                        "Continue"
-                      )}
-                    </Button>
-                    <Button
-                      onClick={() => setShowEmailAuth(false)}
-                      variant="outline"
-                      disabled={isLoading}
-                    >
-                      Back
-                    </Button>
-                  </div>
-                </div>
+                "Continue"
               )}
+            </Button>
+          </div>
 
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <Separator className="bg-white/10" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase tracking-[0.3em] text-white/40">
+              <span className="bg-black/70 px-3">or</span>
+            </div>
+          </div>
 
-              {/* Info */}
-              <div className="text-center text-xs text-gray-500 space-y-2 pt-4">
-                <p>
-                  By continuing, you agree to our{" "}
-                  <a href="#" className="text-blue-600 hover:underline">
-                    Terms of Service
-                  </a>{" "}
-                  and{" "}
-                  <a href="#" className="text-blue-600 hover:underline">
-                    Privacy Policy
-                  </a>
-                </p>
-                <p>We'll use your email domain to identify your company and provide better matches.</p>
-              </div>
-            </CardContent>
-          </Card>
+          <Button
+            onClick={handleGoogleSignIn}
+            disabled={isLoading}
+            className="flex w-full items-center justify-center gap-3 rounded-xl border border-white/10 bg-white/90 py-3 text-sm font-semibold text-black shadow-[0_0_12px_rgba(0,0,0,0.12)] transition hover:bg-white"
+          >
+            {isLoading && provider === "google" ? (
+              <span className="flex items-center gap-2">
+                <Loader2 className="size-4 animate-spin" />
+                <span>Signing in…</span>
+              </span>
+            ) : (
+              <>
+                <Image src="/ic-google.png" alt="Google" width={18} height={18} />
+                <span>Continue with Google</span>
+              </>
+            )}
+          </Button>
 
-          {/* Benefits */}
-          <Card className="mt-6 border-green-200 bg-green-50/50">
-            <CardContent className="p-4">
-              <h3 className="font-semibold text-green-900 mb-2">✨ Why sign in?</h3>
-              <ul className="text-sm text-green-800 space-y-1">
-                <li>• Get matches personalized to your company</li>
-                <li>• Save your search history and preferences</li>
-                <li>• Access premium features and higher quality matches</li>
-                <li>• Track your outreach and connection success</li>
-              </ul>
-            </CardContent>
-          </Card>
+          <Button
+            type="button"
+            disabled
+            className="flex w-full items-center justify-center gap-3 rounded-xl border border-white/10 bg-white/10 py-3 text-sm font-semibold text-white/60"
+          >
+            <Image src="/ic-apple.png" alt="Apple" width={18} height={18} />
+            <span>Continue with Apple</span>
+            <Badge className="ml-auto bg-white/10 text-[10px] uppercase tracking-wider text-white/70">
+              Soon
+            </Badge>
+          </Button>
+
+          <Button
+            type="button"
+            disabled
+            className="flex w-full items-center justify-center gap-3 rounded-xl border border-[#0A66C2]/40 bg-[#0A66C2]/30 py-3 text-sm font-semibold text-white/70"
+          >
+            <Image src="/ic-linkedin.png" alt="LinkedIn" width={18} height={18} />
+            <span>Continue with LinkedIn</span>
+            <Badge className="ml-auto bg-white/10 text-[10px] uppercase tracking-wider text-white/70">
+              Soon
+            </Badge>
+          </Button>
         </div>
-      </main>
+
+        <p className="mt-6 text-center text-[11px] leading-relaxed text-white/40">
+          By continuing, you agree to our{" "}
+          <a href="#" className="text-white/70 underline-offset-2 hover:underline">
+            Terms of Service
+          </a>{" "}and{" "}
+          <a href="#" className="text-white/70 underline-offset-2 hover:underline">
+            Privacy Policy
+          </a>
+          . We use your email domain to tailor ViQi results to your company.
+        </p>
+      </div>
     </div>
   );
 }

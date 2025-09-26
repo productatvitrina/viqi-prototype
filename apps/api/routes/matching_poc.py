@@ -86,6 +86,7 @@ class MatchResult(BaseModel):
     company_blurred: str
     email_masked: str
     email_plain: str
+    raw_email: str
     reason: str
     email_draft: str
     score: float
@@ -142,6 +143,7 @@ def _build_match_response(
                 company_blurred=company_name if is_paid else blur_company_name(company_name),
                 email_plain=plain_email if is_paid else "",
                 email_masked=plain_email if is_paid else mask_email(plain_email),
+                raw_email=plain_email,
                 reason=result.get("reason", "Industry professional with relevant experience"),
                 email_draft=result.get("email_draft", "Professional outreach email"),
                 score=0.9 - (i * 0.1),

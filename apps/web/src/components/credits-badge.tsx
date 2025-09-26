@@ -14,7 +14,10 @@ export function CreditsBadge({ className, autoRefresh = true }: CreditsBadgeProp
 
   if (loading) {
     return (
-      <Badge variant="outline" className={cn("text-xs", className)}>
+      <Badge
+        variant="outline"
+        className={cn("text-xs border-white/20 text-white/70", className)}
+      >
         Credits: …
       </Badge>
     );
@@ -33,7 +36,10 @@ export function CreditsBadge({ className, autoRefresh = true }: CreditsBadgeProp
   }
 
   return (
-    <Badge variant="outline" className={cn("text-xs", className)}>
+    <Badge
+      variant="outline"
+      className={cn("text-xs border-white/20 text-white/80", className)}
+    >
       Credits: {remaining}/{included}
     </Badge>
   );

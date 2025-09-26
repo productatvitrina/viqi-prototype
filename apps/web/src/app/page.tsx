@@ -3,239 +3,253 @@
  */
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { useSession, signOut } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { flowConfig, getNextStep, getStepRoute } from "@/config/flow.config";
 import { getCurrentUser } from "@/lib/api";
 import CreditsBadge from "@/components/credits-badge";
+import { cn } from "@/lib/utils";
+import { Loader2 } from "lucide-react";
+
+const featureHighlights = [
+  {
+    title: "AI-Powered Matching",
+    copy: "We analyse your request and surface the most relevant people instantly.",
+    icon: "🎯",
+  },
+  {
+    title: "Tailored Outreach",
+    copy: "Get personalised email drafts that reflect your brand voice and goals.",
+    icon: "✉️",
+  },
+  {
+    title: "Instant Access",
+    copy: "Unlock verified contacts and act on opportunities the moment you need them.",
+    icon: "⚡",
+  },
+];
+
+const exampleQueries = [
+  "I'm looking for someone to finance my independent film",
+  "Need VFX company for high-budget sci-fi series",
+  "Seeking dubbing services for international distribution",
+  "Looking for post-production partner for documentary",
+  "Need colorist for feature film finishing",
+];
 
 export default function HomePage() {
   const [query, setQuery] = useState("");
   const [customUser, setCustomUser] = useState<any>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
   const { data: session } = useSession();
+  const isQueryPresent = useMemo(() => query.trim().length > 0, [query]);
 
   const handleSignOut = async () => {
     try {
-      localStorage.removeItem('customAuth');
+      localStorage.removeItem("customAuth");
     } catch (err) {
-      console.warn('Failed to remove customAuth from localStorage', err);
+      console.warn("Failed to remove customAuth from localStorage", err);
     }
 
     try {
-      sessionStorage.removeItem('userEmail');
-      sessionStorage.removeItem('backendToken');
-      sessionStorage.removeItem('businessDomain');
-      sessionStorage.removeItem('creditSummary');
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new Event('viqi:sign-out'));
+      sessionStorage.removeItem("userEmail");
+      sessionStorage.removeItem("backendToken");
+      sessionStorage.removeItem("businessDomain");
+      sessionStorage.removeItem("creditSummary");
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("viqi:sign-out"));
       }
     } catch (err) {
-      console.warn('Failed to remove session auth keys', err);
+      console.warn("Failed to remove session auth keys", err);
     }
 
     setCustomUser(null);
 
     if (session?.user) {
-      await signOut({ callbackUrl: '/' });
+      await signOut({ callbackUrl: "/" });
     } else {
-      router.push('/');
+      router.push("/");
     }
   };
 
-  // Check for existing authentication
   useEffect(() => {
     const user = getCurrentUser();
-    console.log("🏠 Landing page auth check:", { 
-      hasSession: !!session?.user, 
-      hasCustomUser: !!user,
-      userEmail: session?.user?.email || user?.email
-    });
     setCustomUser(user);
   }, [session]);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (query.trim()) {
-      // Store query in session storage
-      sessionStorage.setItem("userQuery", query.trim());
-      
-      // Check if user is already authenticated
-      const currentUser = getCurrentUser();
-      const isAuthenticated = session?.user || currentUser;
-      
-      console.log("🚀 New search with auth:", {
-        hasSession: !!session?.user,
-        hasCustomAuth: !!currentUser,
-        isAuthenticated: !!isAuthenticated,
-        query: query.trim()
-      });
-      
-      if (!isAuthenticated) {
-        // Not authenticated - redirect to sign in
-        console.log("❌ User not authenticated, redirecting to sign in");
-        router.push("/auth/signin");
-      } else {
-        // Authenticated - proceed to processing
-        console.log("✅ User authenticated, proceeding to processing");
-        router.push(getStepRoute("processing"));
-      }
+  useEffect(() => {
+    setIsSubmitting(false);
+  }, [session]);
+
+  useEffect(() => {
+    if (!isQueryPresent) {
+      setIsSubmitting(false);
     }
+  }, [isQueryPresent]);
+
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+
+    if (!isQueryPresent) {
+      return;
+    }
+
+    sessionStorage.setItem("userQuery", query.trim());
+
+    const currentUser = getCurrentUser();
+    const isAuthenticated = session?.user || currentUser;
+
+    if (!isAuthenticated) {
+      setIsSubmitting(true);
+      router.push("/auth/signin");
+      return;
+    }
+
+    setIsSubmitting(true);
+    router.push(getStepRoute("processing"));
   };
 
-  const exampleQueries = [
-    "I'm looking for someone to finance my independent film",
-    "Need VFX company for high-budget sci-fi series",
-    "Seeking dubbing services for international distribution",
-    "Looking for post-production partner for documentary",
-    "Need colorist for feature film finishing"
-  ];
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-      {/* Header */}
-      <header className="border-b bg-white/80 backdrop-blur-sm">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-lg">V</span>
-              </div>
-              <span className="text-xl font-bold text-gray-900">ViQi AI</span>
-              <Badge variant="secondary" className="ml-2">Preview</Badge>
+    <div className="relative min-h-screen overflow-hidden bg-[#020710] text-white">
+      <Image
+        src="/bg-top.png"
+        alt="Background glow"
+        fill
+        priority
+        className="pointer-events-none select-none object-cover opacity-70"
+      />
+      <Image
+        src="/bg-gradient-shape.png"
+        alt="Background gradient"
+        width={720}
+        height={720}
+        priority
+        className="pointer-events-none select-none absolute -right-24 top-20 h-[720px] w-[720px] opacity-80"
+      />
+      <div className="absolute inset-0 bg-gradient-to-br from-[#050A17]/40 via-transparent to-[#020710]" />
+
+      <header className="relative z-10 border-b border-white/5 bg-black/20 backdrop-blur-xl">
+        <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6">
+          <div className="flex items-center gap-3">
+            <div className="relative h-9 w-28">
+              <Image
+                src="/logo-ViQi-light.png"
+                alt="ViQi"
+                fill
+                priority
+                className="object-contain"
+              />
             </div>
-            <div className="flex items-center space-x-3">
-              <CreditsBadge />
-              {(session?.user || customUser) ? (
-                <>
-                  <span className="text-sm text-gray-600">
-                    Hi, {session?.user?.name?.split(' ')[0] || customUser?.name}
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleSignOut}
-                  >
-                    Sign Out
-                  </Button>
-                </>
-              ) : null}
-            </div>
+            <Badge className="bg-white/10 text-xs font-medium text-white/80">Preview</Badge>
+          </div>
+          <div className="flex items-center gap-3 text-sm text-white/70">
+            <CreditsBadge />
+            {(session?.user || customUser) ? (
+              <>
+                <span className="hidden text-white/80 md:inline">
+                  Hi, {session?.user?.name?.split(" ")[0] || customUser?.name}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleSignOut}
+                  className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-white hover:bg-white/10"
+                >
+                  Sign Out
+                </Button>
+              </>
+            ) : null}
           </div>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="container mx-auto px-4 py-16">
-        <div className="max-w-4xl mx-auto text-center">
-          {/* Hero Section */}
-          <div className="mb-12">
-            <h1 className="text-4xl md:text-6xl font-bold text-gray-900 mb-6">
-              Connect with the right people for your{" "}
-              <span className="text-blue-600">next project</span>
-            </h1>
-            <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
-              AI-powered matchmaking for Film & TV professionals. 
-              Find partners, vendors, and collaborators with personalized outreach.
-            </p>
-          </div>
+      <main className="relative z-10 mx-auto flex w-full max-w-5xl flex-col items-center px-6 py-16">
+        <div className="mb-12 text-center">
+          <h1 className="mx-auto mb-6 max-w-3xl text-4xl font-semibold leading-tight md:text-6xl">
+            Connect with the right people for your
+            <span className="bg-gradient-to-r from-[#76B8FF] to-[#2E8AE5] bg-clip-text text-transparent"> next project</span>
+          </h1>
+          <p className="mx-auto max-w-2xl text-lg text-white/70 md:text-xl">
+            AI-powered matchmaking for Film, TV, and entertainment professionals. Find partners, vendors, and collaborators with personalised outreach.
+          </p>
+        </div>
 
-          {/* Query Input */}
-          <Card className="max-w-2xl mx-auto mb-12 shadow-lg">
-            <CardContent className="p-6">
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="text-left">
-                  <label htmlFor="query" className="block text-sm font-medium text-gray-700 mb-2">
-                    What are you looking for?
-                  </label>
-                  <Input
-                    id="query"
-                    type="text"
-                    placeholder="Describe what you need in natural language..."
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    className="text-base py-3 px-4"
-                    maxLength={flowConfig.usage.maxQueryLength}
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    {query.length}/{flowConfig.usage.maxQueryLength} characters
-                  </p>
-                </div>
-                <Button 
-                  type="submit" 
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3"
-                  disabled={!query.trim()}
-                >
-                  Ask ViQi →
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
-
-          {/* Example Queries */}
-          <div className="mb-12">
-            <p className="text-sm text-gray-600 mb-4">Try these examples:</p>
-            <div className="flex flex-wrap justify-center gap-2">
-              {exampleQueries.map((example, index) => (
-                <button
-                  key={index}
-                  onClick={() => setQuery(example)}
-                  className="text-xs bg-white hover:bg-gray-50 text-gray-700 px-3 py-2 rounded-full border border-gray-200 transition-colors"
-                >
-                  {example}
-                </button>
-              ))}
+        <div className="relative w-full max-w-3xl rounded-[32px] border border-white/10 bg-black/80 p-8 shadow-[0_0_8px_rgba(0,0,0,0.3)] backdrop-blur-[12.5px]">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="text-left">
+              <label htmlFor="query" className="block text-xs font-semibold uppercase tracking-[0.2em] text-white/50">
+                What are you looking for?
+              </label>
+              <Input
+                id="query"
+                type="text"
+                placeholder="Describe what you need in natural language..."
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                className="mt-3 h-14 rounded-2xl border border-white/10 bg-white/5 px-5 text-base text-white placeholder-white/40 shadow-[0_0_12px_rgba(13,71,161,0.15)] focus-visible:border-[#2E8AE5] focus-visible:ring-0"
+                maxLength={flowConfig.usage.maxQueryLength}
+              />
+              <p className="mt-2 text-xs text-white/40">
+                {query.length}/{flowConfig.usage.maxQueryLength} characters
+              </p>
             </div>
-          </div>
+            <Button
+              type="submit"
+              className={cn(
+                "w-full rounded-full border-[3px] border-white/10 px-6 py-4 text-base font-semibold transition-all duration-200",
+                "disabled:border-white/10 disabled:bg-black disabled:text-white/40 disabled:shadow-[0_0_25px_5px_rgba(6,110,214,0.05)]",
+                isQueryPresent
+                  ? "bg-[radial-gradient(253.12%_50%_at_50%_50%,#2E8AE5_0%,#0068D0_70%)] shadow-[0_0_25px_5px_rgba(6,110,214,0.10)] hover:shadow-[0_0_35px_8px_rgba(46,138,229,0.2)] hover:brightness-110"
+                  : "bg-black"
+              )}
+              disabled={!isQueryPresent || isSubmitting}
+            >
+              {isSubmitting ? (
+                <span className="flex items-center justify-center gap-2 text-white/80">
+                  <Loader2 className="size-4 animate-spin" />
+                  <span>Working…</span>
+                </span>
+              ) : (
+                "Ask ViQi →"
+              )}
+            </Button>
+          </form>
+        </div>
 
-          {/* Feature Cards */}
-          <div className="grid md:grid-cols-3 gap-6 mb-12">
-            <Card className="p-6 hover:shadow-md transition-shadow">
-              <div className="text-2xl mb-4">🎯</div>
-              <h3 className="font-semibold mb-2">AI-Powered Matching</h3>
-              <p className="text-sm text-gray-600">
-                Our AI understands your industry context and finds the most relevant connections
-              </p>
-            </Card>
-            
-            <Card className="p-6 hover:shadow-md transition-shadow">
-              <div className="text-2xl mb-4">✉️</div>
-              <h3 className="font-semibold mb-2">Personalized Outreach</h3>
-              <p className="text-sm text-gray-600">
-                Get custom email drafts that highlight why you're a perfect match
-              </p>
-            </Card>
-            
-            <Card className="p-6 hover:shadow-md transition-shadow">
-              <div className="text-2xl mb-4">🎬</div>
-              <h3 className="font-semibold mb-2">Industry-Focused</h3>
-              <p className="text-sm text-gray-600">
-                Built specifically for Film & TV professionals with deep industry knowledge
-              </p>
-            </Card>
+        <div className="mt-12 w-full max-w-3xl">
+          <p className="mb-4 text-sm font-medium text-white/60">Try these examples:</p>
+          <div className="flex flex-wrap gap-3">
+            {exampleQueries.map((example) => (
+              <button
+                key={example}
+                onClick={() => setQuery(example)}
+                className="rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs font-medium text-white/70 transition duration-150 hover:-translate-y-0.5 hover:border-white/40 hover:bg-white/10 hover:text-white"
+              >
+                {example}
+              </button>
+            ))}
           </div>
+        </div>
 
-          {/* CTA Buttons */}
-          <div className="mt-8 text-sm text-gray-500">
-            Need help? Reach out at <a href="mailto:help@vitrina.ai" className="text-blue-600">help@vitrina.ai</a>
-          </div>
+        <div className="mt-16 grid w-full gap-6 md:grid-cols-3">
+          {featureHighlights.map((feature) => (
+            <div
+              key={feature.title}
+              className="rounded-3xl border border-white/10 bg-white/5 p-6 text-left shadow-[0_25px_50px_-12px_rgba(15,23,42,0.35)] backdrop-blur-lg"
+            >
+              <div className="mb-4 text-2xl">{feature.icon}</div>
+              <h3 className="mb-2 text-lg font-semibold text-white">{feature.title}</h3>
+              <p className="text-sm text-white/70">{feature.copy}</p>
+            </div>
+          ))}
         </div>
       </main>
-
-      {/* Footer */}
-      <footer className="border-t bg-white">
-        <div className="container mx-auto px-4 py-8">
-          <div className="text-center text-sm text-gray-500">
-            <p>© 2025 ViQi. Built for the Film & TV industry.</p>
-            <p className="mt-2">This is a prototype. All data is for demonstration purposes.</p>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 }

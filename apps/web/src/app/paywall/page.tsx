@@ -4,14 +4,13 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, Check, CreditCard, Zap, Crown } from "lucide-react";
-import { flowConfig, getNextStep, getStepRoute } from "@/config/flow.config";
+import { getNextStep, getStepRoute } from "@/config/flow.config";
 import { api, makeAuthenticatedRequest, getCurrentUser } from "@/lib/api";
 import Spinner from "@/components/ui/spinner";
 import { toast } from "sonner";
@@ -330,284 +329,266 @@ export default function PaywallPage() {
     }, 1500);
   };
 
+  const creditOptions = [
+    { credits: 1, label: "1 Credit - $1.00" },
+    { credits: 5, label: "5 Credits - $4.50" },
+    { credits: 10, label: "10 Credits - $8.50" },
+  ];
+
   if (isLoadingPlans) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-        <div className="container mx-auto px-4 py-12">
-          <div className="max-w-4xl mx-auto">
-            <div className="text-center">
-              <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-              <p>Loading pricing plans...</p>
-            </div>
+      <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#020710] px-6 text-white">
+        <Image
+          src="/bg-top.png"
+          alt="Background glow"
+          fill
+          priority
+          className="pointer-events-none select-none object-cover opacity-60"
+        />
+        <Image
+          src="/bg-gradient-shape.png"
+          alt="Background gradient"
+          width={720}
+          height={720}
+          priority
+          className="pointer-events-none select-none absolute right-[-6rem] top-[-6rem] h-[720px] w-[720px] opacity-70"
+        />
+        <div className="absolute inset-0 bg-gradient-to-br from-[#050A17]/50 via-transparent to-[#020710]" />
+
+        <div className="relative z-10 w-full max-w-md rounded-3xl border border-white/10 bg-black/70 p-8 text-center shadow-[0_0_22px_rgba(0,0,0,0.35)] backdrop-blur-2xl">
+          <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full border border-white/15 bg-white/5">
+            <div className="size-6 animate-spin rounded-full border-2 border-white/40 border-t-transparent" />
           </div>
+          <p className="text-sm text-white/70">Loading pricing plans…</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-      {/* Header */}
-      <header className="border-b bg-white/80 backdrop-blur-sm">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-wrap items-center gap-3">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => router.back()}
-                className="flex items-center gap-2 transition-all duration-150 hover:-translate-y-0.5 active:scale-95"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                <span>Back</span>
-              </Button>
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                  <span className="text-white font-bold text-lg">V</span>
-                </div>
-                <span className="text-xl font-bold text-gray-900">ViQi AI</span>
-              </div>
+    <div className="relative min-h-screen overflow-hidden bg-[#020710] text-white">
+      <Image
+        src="/bg-top.png"
+        alt="Background glow"
+        fill
+        priority
+        className="pointer-events-none select-none object-cover opacity-60"
+      />
+      <Image
+        src="/bg-gradient-shape.png"
+        alt="Background gradient"
+        width={720}
+        height={720}
+        priority
+        className="pointer-events-none select-none absolute left-[-6rem] top-[-6rem] h-[720px] w-[720px] opacity-70"
+      />
+      <div className="absolute inset-0 bg-gradient-to-br from-[#050A17]/50 via-transparent to-[#020710]" />
+
+      <header className="relative z-10 border-b border-white/5 bg-black/20 backdrop-blur-xl">
+        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-4 px-6 py-6">
+          <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => router.back()}
+              className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-white hover:bg-white/10"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Back</span>
+            </Button>
+            <div className="relative h-9 w-28">
+              <Image src="/logo-ViQi-light.png" alt="ViQi" fill priority className="object-contain" />
             </div>
-            <div className="flex items-center gap-3">
-              <CreditsBadge />
-              <Badge variant="secondary" className="w-fit self-start sm:self-auto">Step 4 of 5</Badge>
-            </div>
+            <Badge className="bg-white/10 text-xs font-medium text-white/80">Step 4 of 5</Badge>
+          </div>
+          <div className="flex items-center gap-3 text-sm text-white/70">
+            <CreditsBadge />
           </div>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="container mx-auto px-4 sm:px-6 py-12">
-        <div className="max-w-6xl mx-auto">
-          {/* Header */}
-          <div className="text-center mb-12">
-            <div className="inline-flex items-center space-x-2 bg-purple-50 text-purple-700 px-4 py-2 rounded-full mb-4">
-              <Crown className="w-4 h-4" />
-              <span className="text-sm font-medium">Unlock Full Access</span>
-            </div>
-            <h1 className="text-4xl font-bold text-gray-900 mb-4">Choose your plan</h1>
-            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-              Get personalized matches with full contact details and AI-generated outreach emails
-            </p>
+      <main className="relative z-10 mx-auto w-full max-w-6xl px-6 py-16">
+        <div className="text-center">
+          <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white/60">
+            <Crown className="w-4 h-4" />
+            <span>Unlock full access</span>
           </div>
+          <h1 className="mt-6 text-3xl font-semibold md:text-4xl">Choose your plan</h1>
+          <p className="mt-2 text-sm text-white/60 md:text-base">
+            Get personalised matches with full contact details and AI-generated outreach emails tailored to your company.
+          </p>
+        </div>
 
-          {/* Billing Toggle */}
-          <div className="flex justify-center mb-8">
-            <div className="bg-gray-100 p-1 rounded-lg">
-              <button
-                onClick={() => setBillingCycle("monthly")}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  billingCycle === "monthly"
-                    ? "bg-white text-gray-900 shadow-sm"
-                    : "text-gray-600 hover:text-gray-900"
-                }`}
-              >
-                Monthly
-              </button>
-              <button
-                onClick={() => setBillingCycle("annual")}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  billingCycle === "annual"
-                    ? "bg-white text-gray-900 shadow-sm"
-                    : "text-gray-600 hover:text-gray-900"
-                }`}
-              >
-                Annual
-                <Badge variant="secondary" className="ml-2 text-xs">
-                  Save 17%
-                </Badge>
-              </button>
-            </div>
+        <div className="mt-10 flex justify-center">
+          <div className="inline-flex items-center rounded-full border border-white/10 bg-white/10 p-1 text-xs font-semibold text-white/70">
+            <button
+              onClick={() => setBillingCycle("monthly")}
+              className={`rounded-full px-5 py-2 transition duration-150 ${
+                billingCycle === "monthly"
+                  ? "bg-white text-black shadow-[0_0_18px_rgba(255,255,255,0.2)]"
+                  : "text-white/60 hover:text-white"
+              }`}
+            >
+              Monthly
+            </button>
+            <button
+              onClick={() => setBillingCycle("annual")}
+              className={`rounded-full px-5 py-2 transition duration-150 ${
+                billingCycle === "annual"
+                  ? "bg-white text-black shadow-[0_0_18px_rgba(46,138,229,0.35)]"
+                  : "text-white/60 hover:text-white"
+              }`}
+            >
+              Annual
+              <Badge className="ml-2 bg-white/10 text-[10px] uppercase tracking-[0.3em] text-white/70">
+                Save 17%
+              </Badge>
+            </button>
           </div>
+        </div>
 
-          {/* Plans */}
-          <div className="grid md:grid-cols-2 gap-8 mb-12">
-            {plans.map((plan) => {
-              const price = billingCycle === "monthly" ? plan.monthly_price_display : plan.annual_price_display;
-              const pricePerMonth = billingCycle === "annual" 
+        <div className="mt-12 grid gap-8 md:grid-cols-2">
+          {plans.map((plan) => {
+            const price = billingCycle === "monthly" ? plan.monthly_price_display : plan.annual_price_display;
+            const pricePerMonth =
+              billingCycle === "annual"
                 ? Math.round(plan.annual_price_cents / 12 / 100)
                 : plan.monthly_price_cents / 100;
-              const isPopular = plan.name === "Pro";
+            const isPopular = plan.name === "Pro";
 
-              return (
-                <Card
-                  key={plan.id}
-                  className={`relative transition-all duration-200 hover:-translate-y-1 hover:shadow-xl ${
-                    isPopular ? "border-blue-500 shadow-lg scale-105" : ""
+            return (
+              <div
+                key={plan.id}
+                className={`relative rounded-3xl border border-white/10 bg-white/5 p-8 backdrop-blur-xl transition duration-200 hover:-translate-y-1 hover:shadow-[0_25px_50px_-12px_rgba(15,23,42,0.6)] ${
+                  isPopular ? "border-[#2E8AE5] shadow-[0_0_35px_rgba(46,138,229,0.35)] scale-[1.01]" : ""
+                }`}
+              >
+                {isPopular && (
+                  <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-[rgba(46,138,229,0.9)] text-[10px] font-semibold uppercase tracking-[0.3em] text-white">
+                    Most Popular
+                  </Badge>
+                )}
+
+                <div className="flex items-center gap-3 text-sm text-white/70">
+                  {plan.name === "Starter" ? (
+                    <Zap className="w-5 h-5 text-emerald-300" />
+                  ) : (
+                    <Crown className="w-5 h-5 text-[#d7b3ff]" />
+                  )}
+                  <span className="text-base font-semibold text-white">{plan.name}</span>
+                </div>
+
+                <div className="mt-6 text-white">
+                  <span className="text-4xl font-semibold">{price}</span>
+                  <span className="ml-2 text-sm text-white/60">
+                    {billingCycle === "annual" ? "/year" : "/month"}
+                  </span>
+                  {billingCycle === "annual" && (
+                    <div className="mt-1 text-xs text-white/50">${pricePerMonth}/month billed annually</div>
+                  )}
+                </div>
+
+                <ul className="mt-6 space-y-3 text-sm text-white/70">
+                  <li className="flex items-center gap-3">
+                    <Check className="w-4 h-4 text-emerald-300" />
+                    <span>{plan.included_credits} credits included</span>
+                  </li>
+                  <li className="flex items-center gap-3">
+                    <Check className="w-4 h-4 text-emerald-300" />
+                    <span>AI-powered matching</span>
+                  </li>
+                  <li className="flex items-center gap-3">
+                    <Check className="w-4 h-4 text-emerald-300" />
+                    <span>Personalised outreach drafts</span>
+                  </li>
+                  <li className="flex items-center gap-3">
+                    <Check className="w-4 h-4 text-emerald-300" />
+                    <span>Full contact details</span>
+                  </li>
+                  {plan.name === "Pro" && (
+                    <>
+                      <li className="flex items-center gap-3">
+                        <Check className="w-4 h-4 text-emerald-300" />
+                        <span>Priority matching & support</span>
+                      </li>
+                      <li className="flex items-center gap-3">
+                        <Check className="w-4 h-4 text-emerald-300" />
+                        <span>Advanced analytics dashboard</span>
+                      </li>
+                    </>
+                  )}
+                </ul>
+
+                <Button
+                  onClick={() => handleSubscribe(plan.name)}
+                  disabled={isLoading && selectedPlan === plan.name}
+                  className={`mt-6 w-full rounded-full border-[3px] border-white/10 px-6 py-3 text-sm font-semibold transition-all duration-150 hover:-translate-y-0.5 active:scale-95 ${
+                    isPopular
+                      ? "bg-[radial-gradient(253.12%_50%_at_50%_50%,#2E8AE5_0%,#0068D0_70%)] text-white shadow-[0_0_25px_5px_rgba(6,110,214,0.2)]"
+                      : "bg-white/10 text-white hover:bg-white/20"
                   }`}
                 >
-                  {isPopular && (
-                    <Badge className="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white">
-                      Most Popular
-                    </Badge>
-                  )}
-                  
-                  <CardHeader>
-                    <div className="flex items-center space-x-2">
-                      {plan.name === "Starter" ? (
-                        <Zap className="w-5 h-5 text-green-600" />
-                      ) : (
-                        <Crown className="w-5 h-5 text-purple-600" />
-                      )}
-                      <CardTitle className="text-xl">{plan.name}</CardTitle>
-                    </div>
-                    <div className="mt-4">
-                      <span className="text-4xl font-bold">{price}</span>
-                      <span className="text-gray-500">
-                        {billingCycle === "annual" ? "/year" : "/month"}
-                      </span>
-                      {billingCycle === "annual" && (
-                        <div className="text-sm text-gray-500">
-                          ${pricePerMonth}/month billed annually
-                        </div>
-                      )}
-                    </div>
-                  </CardHeader>
-
-                  <CardContent>
-                    <ul className="space-y-3 mb-6">
-                      <li className="flex items-center space-x-3">
-                        <Check className="w-4 h-4 text-green-600" />
-                        <span>{plan.included_credits} credits included</span>
-                      </li>
-                      <li className="flex items-center space-x-3">
-                        <Check className="w-4 h-4 text-green-600" />
-                        <span>AI-powered matching</span>
-                      </li>
-                      <li className="flex items-center space-x-3">
-                        <Check className="w-4 h-4 text-green-600" />
-                        <span>Personalized email drafts</span>
-                      </li>
-                      <li className="flex items-center space-x-3">
-                        <Check className="w-4 h-4 text-green-600" />
-                        <span>Full contact details</span>
-                      </li>
-                      {plan.name === "Pro" && (
-                        <>
-                          <li className="flex items-center space-x-3">
-                            <Check className="w-4 h-4 text-green-600" />
-                            <span>Priority matching</span>
-                          </li>
-                          <li className="flex items-center space-x-3">
-                            <Check className="w-4 h-4 text-green-600" />
-                            <span>Advanced analytics</span>
-                          </li>
-                        </>
-                      )}
-                    </ul>
-
-                    <Button
-                      onClick={() => handleSubscribe(plan.name)}
-                      disabled={isLoading && selectedPlan === plan.name}
-                      className={`w-full transition-transform duration-150 hover:-translate-y-0.5 active:scale-95 ${
-                        isPopular 
-                          ? "bg-blue-600 hover:bg-blue-700 text-white" 
-                          : "bg-gray-900 hover:bg-gray-800 text-white"
-                      }`}
-                      size="lg"
-                    >
-                      {isLoading && selectedPlan === plan.name ? (
-                        <span className="flex items-center gap-2">
-                          <Spinner className="text-white" />
-                          <span>Processing...</span>
-                        </span>
-                      ) : (
-                        <span className="flex items-center gap-2">
-                          <CreditCard className="w-4 h-4" />
-                          <span>Choose {plan.name}</span>
-                        </span>
-                      )}
-                    </Button>
-
-                    <p className="text-xs text-center text-gray-500 mt-2">
-                      Additional credits: ${(plan.overage_price_cents / 100).toFixed(2)} each
-                    </p>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-
-          {/* One-time Credits */}
-          <Card className="border-green-200 bg-green-50/50">
-            <CardHeader>
-              <CardTitle className="text-center">Just need credits for this match?</CardTitle>
-              <p className="text-center text-gray-600">Purchase credits without a subscription</p>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap justify-center gap-3">
-                <Button
-                  onClick={() => handleCreditPurchase(1)}
-                  variant="outline"
-                  disabled={isLoading}
-                  className="transition-all duration-150 hover:-translate-y-0.5 active:scale-95"
-                >
-                  {isLoading && pendingCredit === 1 ? (
-                    <span className="flex items-center gap-2">
-                      <Spinner />
-                      <span>Processing...</span>
+                  {isLoading && selectedPlan === plan.name ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <Spinner className="text-white" />
+                      <span>Processing…</span>
                     </span>
                   ) : (
-                    "1 Credit - $1.00"
-                  )}
-                </Button>
-                <Button
-                  onClick={() => handleCreditPurchase(5)}
-                  variant="outline"
-                  disabled={isLoading}
-                  className="transition-all duration-150 hover:-translate-y-0.5 active:scale-95"
-                >
-                  {isLoading && pendingCredit === 5 ? (
-                    <span className="flex items-center gap-2">
-                      <Spinner />
-                      <span>Processing...</span>
+                    <span className="flex items-center justify-center gap-2">
+                      <CreditCard className="w-4 h-4" />
+                      <span>Choose {plan.name}</span>
                     </span>
-                  ) : (
-                    "5 Credits - $4.50"
                   )}
                 </Button>
-                <Button
-                  onClick={() => handleCreditPurchase(10)}
-                  variant="outline"
-                  disabled={isLoading}
-                  className="transition-all duration-150 hover:-translate-y-0.5 active:scale-95"
-                >
-                  {isLoading && pendingCredit === 10 ? (
-                    <span className="flex items-center gap-2">
-                      <Spinner />
-                      <span>Processing...</span>
-                    </span>
-                  ) : (
-                    "10 Credits - $8.50"
-                  )}
-                </Button>
+
+                <p className="mt-3 text-center text-[11px] text-white/40">
+                  Additional credits ${(plan.overage_price_cents / 100).toFixed(2)} each
+                </p>
               </div>
-            </CardContent>
-          </Card>
+            );
+          })}
+        </div>
 
-          {/* Demo Section */}
-          <div className="text-center mt-8">
-            <Separator className="mb-6" />
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 max-w-md mx-auto">
-              <h3 className="font-semibold text-yellow-800 mb-2">🚀 Demo Mode</h3>
-              <p className="text-sm text-yellow-700 mb-3">
-                Skip payment for demonstration purposes
-              </p>
+        <div className="mt-14 rounded-3xl border border-white/10 bg-white/5 p-6 text-sm text-white/70 backdrop-blur-lg">
+          <h3 className="text-center text-base font-semibold text-white">Just need credits for this match?</h3>
+          <p className="mt-2 text-center text-xs text-white/50">Purchase one-off credits without a subscription.</p>
+          <div className="mt-6 flex flex-wrap justify-center gap-3">
+            {creditOptions.map(({ credits, label }) => (
               <Button
-                onClick={handleDemo}
-                variant="outline"
-                className="border-yellow-300 text-yellow-800 hover:bg-yellow-100 transition-all duration-150 hover:-translate-y-0.5 active:scale-95"
+                key={credits}
+                onClick={() => handleCreditPurchase(credits)}
+                variant="ghost"
+                disabled={isLoading}
+                className="rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs font-semibold text-white/70 transition hover:bg-white/15"
               >
-                Continue Demo (No Payment)
+                {isLoading && pendingCredit === credits ? (
+                  <span className="flex items-center gap-2">
+                    <Spinner className="text-white" />
+                    <span>Processing…</span>
+                  </span>
+                ) : (
+                  label
+                )}
               </Button>
-            </div>
+            ))}
           </div>
+        </div>
 
-          {/* Footer */}
-          <div className="text-center mt-12 text-sm text-gray-500">
-            <p>💳 Secure payments powered by Stripe</p>
-            <p className="mt-1">✨ Cancel anytime • 30-day money-back guarantee</p>
-          </div>
+        <div className="mt-10 rounded-3xl border border-amber-300/30 bg-amber-500/10 p-6 text-center text-sm text-amber-100 backdrop-blur-lg">
+          <h3 className="text-base font-semibold text-amber-100">Demo mode</h3>
+          <p className="mt-2 text-xs text-amber-200">Skip payment and continue exploring the flow.</p>
+          <Button
+            onClick={handleDemo}
+            variant="ghost"
+            className="mt-4 rounded-full border border-amber-200/40 bg-amber-200/20 px-4 py-2 text-xs font-semibold text-amber-50 hover:bg-amber-200/30"
+          >
+            Continue demo (no payment)
+          </Button>
+        </div>
+
+        <div className="mt-12 text-center text-[11px] text-white/40">
+          <p>💳 Secure payments powered by Stripe</p>
+          <p className="mt-1">✨ Cancel anytime • 30-day money-back guarantee</p>
         </div>
       </main>
     </div>

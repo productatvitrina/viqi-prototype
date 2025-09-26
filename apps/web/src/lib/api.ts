@@ -65,10 +65,20 @@ apiClient.interceptors.response.use(
     return response;
   },
   (error) => {
-    console.error(`❌ API Error: ${error.response?.status} ${error.config?.url}`, error.response?.data);
+    const status = error.response?.status;
+    const url = error.config?.url ?? "";
+    const isExpected404 =
+      status === 404 &&
+      (url.includes("/api/users/me/credits") || url.includes("/api/users/me/subscription"));
+
+    if (isExpected404) {
+      console.warn(`ℹ️ API 404 (expected) ${url}`);
+    } else {
+      console.error(`❌ API Error: ${status} ${url}`, error.response?.data);
+    }
     
     // Handle specific error cases
-    if (error.response?.status === 401) {
+    if (status === 401) {
       console.warn("🔒 Unauthorized - authentication expired or invalid");
       
       // Clear any stored auth data that might be stale
