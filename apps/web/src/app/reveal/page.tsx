@@ -404,7 +404,7 @@ function RevealContent() {
       <div className="absolute inset-0 bg-gradient-to-br from-[#050A17]/50 via-transparent to-[#020710]" />
 
       <header className="relative z-10 border-b border-white/5 bg-black/20 backdrop-blur-xl">
-        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-4 px-6 py-6">
+        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6 sm:py-6">
           <div className="flex items-center gap-3">
             <Button
               variant="ghost"
@@ -429,7 +429,7 @@ function RevealContent() {
         </div>
       </header>
 
-      <main className="relative z-10 mx-auto w-full max-w-6xl px-6 py-16">
+      <main className="relative z-10 mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-12 md:py-16">
         {userQuery ? (
           <div className="flex flex-col gap-4 rounded-3xl border border-white/10 bg-white/5 p-6 text-sm text-white/70 backdrop-blur-lg md:flex-row md:items-center md:justify-between">
             <div>
@@ -472,23 +472,23 @@ function RevealContent() {
           </div>
         ) : null}
 
-        <div className="mt-12 grid gap-6 md:grid-cols-2">
+        <div className="mt-8 grid gap-4 sm:gap-6 md:grid-cols-2 md:mt-12">
           {matches.map((match) => (
             <div
               key={match.id}
-              className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur-lg transition duration-200 hover:-translate-y-1 hover:shadow-[0_25px_50px_-12px_rgba(15,23,42,0.6)]"
+              className="rounded-3xl border border-white/10 bg-white/5 p-4 backdrop-blur-lg transition duration-200 hover:-translate-y-1 hover:shadow-[0_25px_50px_-12px_rgba(15,23,42,0.6)] sm:p-6"
             >
               <div className="flex flex-col gap-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                  <div className="flex-1">
                     <h3 className="text-lg font-semibold text-white">{match.name}</h3>
                     <p className="text-sm text-white/60">{match.title}</p>
-                    <div className="mt-2 flex items-center gap-2 text-xs text-white/50">
-                      <Building className="w-4 h-4" />
-                      <span>{match.company_name}</span>
+                    <div className="mt-3 flex items-center gap-2 text-base text-white/80">
+                      <Building className="w-5 h-5" />
+                      <span className="font-medium">{match.company_name}</span>
                     </div>
                   </div>
-                  <Badge className="bg-white/10 text-xs font-semibold uppercase tracking-[0.3em] text-emerald-200">
+                  <Badge className="bg-white/10 text-xs font-semibold uppercase tracking-[0.3em] text-emerald-200 self-start">
                     {Math.round(match.score * 100)}% match
                   </Badge>
                 </div>
